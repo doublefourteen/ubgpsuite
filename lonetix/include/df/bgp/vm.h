@@ -241,7 +241,6 @@ struct Bgpvm {
 	Uint16      nk;           ///< count of constants (K) available in `k`
 	Uint8       nfuncs;       ///< count of functions (FN) available in `funcs`
 	Boolean8    setupFailed;  ///< whether a `Bgp_VmEmit()` or `Bgp_VmPermAlloc()` on this VM ever failed.
-	Boolean8    isRunning;    ///< whether the VM is being executed
 	BgpvmRet    errCode;      ///< whether the VM encountered an error
 	Uint32      hLowMark;     ///< VM heap low memory mark
 	Uint32      hHighMark;    ///< VM heap high memory mark

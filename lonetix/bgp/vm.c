@@ -69,8 +69,6 @@ Judgement Bgp_InitVm(Bgpvm *vm, size_t heapSiz)
 
 Judgement Bgp_VmEmit(Bgpvm *vm, Bgpvmbytec bytec)
 {
-	assert(!vm->isRunning);
-
 	BGP_VMCLRERR(vm);
 
 	if (BGP_VMOPC(bytec) == BGP_VMOP_END)
@@ -100,8 +98,6 @@ Judgement Bgp_VmEmit(Bgpvm *vm, Bgpvmbytec bytec)
 
 void *Bgp_VmPermAlloc(Bgpvm *vm, size_t size)
 {
-	assert(!vm->isRunning);
-
 	BGP_VMCLRERR(vm);
 
 	size = ALIGN(size, ALIGNMENT);
@@ -124,8 +120,6 @@ void *Bgp_VmPermAlloc(Bgpvm *vm, size_t size)
 
 void *Bgp_VmTempAlloc(Bgpvm *vm, size_t size)
 {
-	assert(vm->isRunning);
-
 	size = ALIGN(size, ALIGNMENT);
 
 	size_t stksiz = vm->si * sizeof(Bgpvmval);
@@ -144,8 +138,6 @@ void *Bgp_VmTempAlloc(Bgpvm *vm, size_t size)
 
 void Bgp_VmTempFree(Bgpvm *vm, size_t size)
 {
-	assert(vm->isRunning);
-
 	size = ALIGN(size, ALIGNMENT);
 
 	assert(size + vm->hHighMark <= vm->hMemSiz);
@@ -155,8 +147,6 @@ void Bgp_VmTempFree(Bgpvm *vm, size_t size)
 Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 {
 	// Fundamental sanity checks
-	assert(!vm->isRunning);
-
 	if (vm->setupFailed) UNLIKELY {
 		vm->errCode = BGPEBADVM;
 		goto cant_run;
@@ -177,7 +167,7 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 	vm->msg       = msg;
 	vm->curMatch  = &discardMatch;
 	vm->matches   = NULL;
-	vm->errCode   = BGPENOERR;
+	BGP_VMCLRERR(vm);
 
 	// Populate computed goto table if necessary
 #ifdef DF_BGP_VM_USES_COMPUTED_GOTO
@@ -187,7 +177,6 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 	// Execute bytecode according to the #included vm_<impl>def.h
 	Bgpvmbytec ir;  // Instruction Register
 
-	vm->isRunning = TRUE;
 	while (TRUE) {
 		// FETCH stage
 		FETCH(ir, vm);
@@ -316,9 +305,6 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 	}
 
 terminate:
-	vm->curMatch  = NULL;  // prevent accidental access outside Bgp_VmExec()
-	vm->isRunning = FALSE;
-
 	if (Bgp_SetErrStat(vm->errCode) != OK) UNLIKELY
 		result = FALSE;
 
@@ -352,8 +338,6 @@ Judgement Bgp_VmStoreMsgTypeMatch(Bgpvm *vm, Boolean isMatching)
 
 void Bgp_VmStoreMatch(Bgpvm *vm)
 {
-	assert(vm->isRunning);
-
 	if (vm->curMatch == &discardMatch)
 		return;  // discard store request
 
@@ -811,8 +795,6 @@ void Bgp_VmDoRelt(Bgpvm *vm, Uint8 arg)
 
 void Bgp_ResetVm(Bgpvm *vm)
 {
-	assert(!vm->isRunning);
-
 	vm->nk        = 0;
 	vm->nfuncs    = 0;
 	vm->nmatches  = 0;
@@ -831,8 +813,6 @@ void Bgp_ResetVm(Bgpvm *vm)
 
 void Bgp_ClearVm(Bgpvm *vm)
 {
-	assert(!vm->isRunning);
-
 	free(vm->heap);
 	free(vm->prog);
 }
