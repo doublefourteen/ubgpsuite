@@ -666,6 +666,12 @@ static Judgement DumpBgp(Stmbuf        *sb,
 		DumpMrtInfoTrailer(sb, ctx);
 		break;
 
+	case BGP_KEEPALIVE:
+		Bufio_Putc(sb, KEEPALIVE_MARKER);
+		Bufio_Putsn(sb, SEPS_BUF, 8);
+		DumpMrtInfoTrailer(sb, ctx);
+		break;
+
 	case BGP_ROUTE_REFRESH:
 		Bufio_Putc(sb, ROUTE_REFRESH_MARKER);
 		Bufio_Putsn(sb, SEPS_BUF, 8);
