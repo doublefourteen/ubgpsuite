@@ -824,6 +824,8 @@ Asn Bgp_NextAsPath(Aspathiter *it)
 
 static Boolean Bgp_SwitchNextHop(Nexthopiter *it)
 {
+	Boolean res = FALSE;  // iteration end, unless found otherwise
+
 	if (it->nextHop) {
 		// Setup for read from NEXT_HOP
 		if (!BGP_CHKNEXTHOPLEN(it->nextHop)) {
@@ -838,9 +840,9 @@ static Boolean Bgp_SwitchNextHop(Nexthopiter *it)
 		it->safi = SAFI_UNICAST;
 
 		it->nextHop = NULL;  // consume NEXT_HOP
-		goto done;
-	}
-	if (it->mpReach) {
+		res = TRUE;
+
+	} else if (it->mpReach) {
 		// Setup for read from MP_REACH_NLRI
 		Bgpmpnexthop *nh;
 
@@ -862,8 +864,11 @@ static Boolean Bgp_SwitchNextHop(Nexthopiter *it)
 			}
 
 			Bgpmpfam *fam = BGP_MPFAMILY(it->mpReach);
-			if (it->isRibv2 && (fam->afi != it->afiRibv2 || it->safi != it->safiRibv2))
-				goto done;  // discard MP_REACH_NLRI if it doesn't match with RIB AFI/SAFI
+			if (it->isRibv2 && (fam->afi != it->afiRibv2 || it->safi != it->safiRibv2)) {
+				// discard MP_REACH_NLRI if it doesn't match with RIB AFI/SAFI
+				it->mpReach = NULL;
+				goto done;
+			}
 
 			nh = BGP_MPNEXTHOP(it->mpReach);
 			it->afi  = fam->afi;
@@ -873,14 +878,14 @@ static Boolean Bgp_SwitchNextHop(Nexthopiter *it)
 		it->base    = (Uint8 *) nh;
 		it->ptr     = nh->data;
 		it->lim     = &nh->data[nh->len];
+
 		it->mpReach = NULL;  // consume MP_REACH_NLRI
-		goto done;
+		res = TRUE;
 	}
 
-	// Iteration over
 done:
 	Bgp_SetErrStat(BGPENOERR);
-	return FALSE;
+	return res;
 }
 
 Judgement Bgp_StartAllNextHops(Nexthopiter      *it,
