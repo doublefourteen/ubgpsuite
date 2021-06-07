@@ -1,4 +1,4 @@
-µbgpsuite -- Micro BGP Suite and Utility library
+µbgpsuite - Micro BGP Suite and Utility library
 ================================================
 
 # Introduction
@@ -11,7 +11,7 @@ The purpose of this suite is establishing a friendly environment
 for research and experimentation of useful data study
 techniques to improve network health.
 
-# lonetix -- Low-overhead Networking programming Interface
+# lonetix - Low-overhead Networking programming Interface
 
 The project is centered around `lonetix`, a low overhead and
 low level networking library written in C.
@@ -33,7 +33,7 @@ Extensive documentation of `lonetix` and its API is available.
 # Utilities
 
 `lonetix` is the building block of `bgpgrep`, this far our single
-utility -- but more of them are coming, right?
+utility - but more of them are coming, right?
 
 `bgpgrep` performs fast and reliable analysis of MRT dumps
 collected by most Route Collecting projects. It takes a different
@@ -41,6 +41,55 @@ turn compared to most similar tools, in that it provides extensive
 filtering utilities, in order to extrapolate only relevant data
 out of each MRT dump (and incidentally save quite some time).
 In-depth documentation of `bgpgrep` is available in its man page.
+
+# Building
+
+The Micro BGP Suite uses [Meson](https://mesonbuild.com/) to manage its build
+process.
+
+The basic steps to configure and build `lonetix` and every utility, with
+debug options enabled, is:
+```sh
+$ git clone https://git.doublefourteen.io/bgp/ubgpsuite.git
+$ cd ubgpsuite
+$ meson build && cd build
+$ ninja
+```
+
+In case you want to perform a release build, enable the release configuration,
+like this:
+```sh
+$ git clone https://git.doublefourteen.io/bgp/ubgpsuite.git
+$ cd ubgpsuite
+$ meson --buildtype=release build && cd build
+$ ninja
+```
+
+Or, alternatively, run the following command inside an already existing `build`
+directory:
+```sh
+$ meson configure -Dbuildtype=release
+$ ninja
+```
+
+Many build options are available to configure `µbgpsuite` build, you can use:
+```sh
+$ meson configure
+```
+
+to list them.
+
+# Documentation
+
+The Micro BGP Suite uses [Doxygen](https://www.doxygen.org/index.html) to document its API.
+
+If you have `doxygen` installed in your system you can use:
+
+```sh
+$ ninja doc
+```
+
+inside `build` directory to generate Doxygen documentation.
 
 # License
 
