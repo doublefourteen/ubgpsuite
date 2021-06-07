@@ -78,18 +78,26 @@ $ meson configure
 ```
 
 to list them.
+Refer to the [official documentation](https://mesonbuild.com/Manual.html)
+for more advanced build management tasks.
 
 # Documentation
 
 The Micro BGP Suite uses [Doxygen](https://www.doxygen.org/index.html) to document its API.
 
-If you have `doxygen` installed in your system you can use:
+In order to build `µbgpsuite` documentation you must enable the `build-doc`
+configure flag. This flag is enabled automatically if you have `doxygen`
+installed in your system when you run `meson` to configure the project for the
+first time.
 
+Once the flag is enabled, you can use:
 ```sh
 $ ninja doc
 ```
+inside build directory to generate Doxygen documentation.
 
-inside `build` directory to generate Doxygen documentation.
+You can access the documentation by pointing your web browser to
+`doc/html/index.html` inside the build directory.
 
 # License
 
