@@ -1,0 +1,919 @@
+'\" et
+.TH BGPGREP 1 @VERSION@ BGPGREP "User Commands"
+.\"
+.SH NAME
+@UTILITY@
+\(em filter and print BGP data within MRT dumps
+.SH SYNOPSIS
+.LP
+.nf
+@UTILITY@ \fB[\fIOPTIONS\fB]\fR... \fB[\fIFILES\fB]\fR... \fB[\fIEXPRESSION\fB]
+.fi
+
+.SH DESCRIPTION
+The
+.IR @UTILITY@
+utility reads each possibly compressed Multithreaded Routing Toolkit
+(MRT)
+dump file specified by
+.IR FILES
+and formats its contents to standard output.
+.IR @UTILITY@
+may optionally evaluate a predicate defined by
+.IR EXPRESSION
+over every MRT record containing a BGP message.
+Whenever such predicate evaluates as false the relevant BGP message is
+discarded from output (see the
+.IR EXAMPLES
+section below).
+.P
+.IR EXPRESSION
+predicates only affect BGP messages output, other kind of information, such as
+state changes, is always printed by
+.IR @UTILITY@
+regardless of any filtering rule.
+.P
+.IR @UTILITY@
+prints diagnostics to standard error,
+it detects and tolerates data corruption as much as possible.
+Corruption within a BGP message causes only the affected message to be
+dropped. Unrecoverable corruption within the entire MRT dump file causes
+the whole file to be dropped,
+.IR @UTILITY@
+will then move to the next file in
+.IR FILES ,
+if any.
+.P
+Such events are always reported with reasonable diagnostic errors.
+Parsed data up to the corruption point may still be printed to
+standard output.
+
+.SH OPTIONS
+.IR @UTILITY@
+expects its options before the
+.IR FILES
+list. This is due to the fact that
+.IR @UTILITY@
+must distinguish between options and its expression predicate (see the
+.IR OPERANDS
+section below, for details on how
+.IR @UTILITY@
+makes such distinction).
+.P
+The following options are supported:
+
+.IP "\fB\-\-dump\-bytecode\fP" 10
+Debug option, causes
+.IR @UTILITY@
+to dump its filtering engine bytecode to standard error before starting
+MRT dump files processing.
+
+.IP "\fB\-\-no\-color\fP" 10
+.IR @UTILITY@
+may ease visualization by surrounding some output with color escape sequences,
+on terminals that support this feature. This option forces colored text
+output off.
+
+.IP "\fB\-h or \-\-help\fP" 10
+Prints a short help message, summarizing
+.IR @UTILITY@
+functionality.
+
+.IP "\fB\-?\fP" 10
+Equivalent to
+.BR \-h .
+
+.SH OPERANDS
+.IR @UTILITY@
+interprets all its operands up to but not including the first operand
+that starts with a `\-' , or is a `(' or a `!', as the
+.IR FILES
+operand.
+Each of these operands are pathnames to a MRT dump file to be
+processed. An actual `\-' is a placemarker to read uncompressed MRT data
+from standard input at that point during processing (see
+.IR STDIN
+section below).
+.P
+The first operand that starts with a `\-' , or is a `(' or a `!',
+and any subsequent arguments, are interpreted as an
+.IR EXPRESSION
+predicate.
+Legal predicates are composed of the following terms:
+
+.IP "\fB\-type\ \fImsg\-type\fR" 10
+Evaluates as true if the BGP message type matches
+.IR `msg\-type' .
+Message types may be provided by a human readable type name, as defined by
+.IR "RFC 4271" ", " "Section 4"
+(e.g. OPEN, UPDATE), or any other relevant RFC defining the message type
+(e.g. ROUTE_REFRESH).
+An explicit numeric code may also be provided (e.g. 1 as an equivalent to OPEN).
+
+.IP "\fB\-attr\ \fIattribute\-type\fR" 10
+Evaluates as true if the BGP message is an UPDATE containing a path attribute of
+type
+.IR `attribute\-type' .
+The attribute type may be specified by a human readable name, as defined by
+.IR "RFC 4271" ", " "Section 5.1"
+(e.g. AS_PATH, ATOMIC_AGGREGATE), or any other relevant RFCs defining the
+interesting path attribute (e.g. COMMUNITY).
+An explicit numeric code may also be provided (e.g. 8 as an
+equivalent to COMMUNITY), which is especially useful to specify
+non-standard path attributes.
+
+.IP "\fB\-aspath\ \fIpattern\fR" 10
+Evaluates as true if the BGP message is an UPDATE with an AS_PATH that matches
+the regular expression specified by
+.IR `pattern' .
+See the
+.IR "AS_PATH REGULAR EXPRESSIONS"
+section below for details.
+
+.IP "\fB\-peer\ \fIpeer\-expression\fR" 10
+Evaluates as true if
+.IR `peer\-expression'
+matches the peer that provided
+the BGP data. This term matches the PEER field as displayed by the
+.IR "LINE ORIENTED OUTPUT"
+format (see section below for details).
+Supported peer matching expressions are documented in the
+.IR "PEER MATCHING EXPRESSIONS"
+section below.
+
+.IP "\fB\-loops\fR" 10
+Evaluates as true if BGP message is an UPDATE whose AS_PATH contains loops.
+
+.IP "\fB\-exact\ \fIprefix\-expression\fR" 10
+Evaluates as true if BGP message is an UPDATE and contains at least one of the
+relevant networks of interest specified in
+.IR `prefix\-expression' .
+See
+.IR "PREFIX MATCHING EXPRESSIONS"
+section for details.
+
+.IP "\fB\-supernet\ \fIprefix\-expression\fR" 10
+Similar to
+.BR \-exact ,
+but evaluates as true if BGP message contains supernets of the relevant networks
+of interest, or the actual networks themselves.
+.IP "\fB\-subnet\ \fIprefix\-expression\fR" 10
+Similar to
+.BR \-exact,
+but evaluates as true if BGP message contains subnets of the relevant networks
+of interest.
+.IP "\fB\-related\ \fIprefix\-expression\fR" 10
+Similar to
+.BR \-exact
+but evaluates as true if BGP message contains prefixes related to the relevant
+networks of interest. A related network is defined to be either a subnet
+or a supernet of the specified prefix.
+
+.IP "\fB\-timestamp\ \fItime\-expression\fP" 10
+Evaluates as true if the timestamp at which the BGP data was originated or
+collected matches the specified
+.IR 'time\-expression' .
+Accepted expressions are described in the
+.IR "TIMESTAMP MATCHING EXPRESSIONS"
+section.
+
+.IP "\fB\-communities\ \fIcommunities\-expression\fP" 10
+Evaluates as true if BGP message is an UPDATE whose path attributes
+contains at least one community specified within
+.IR 'communities\-expression' ,
+see the
+.IR "COMMUNITY MATCHING EXPRESSIONS"
+section below for details.
+
+.IP "\fB\-all\-communities\ \fIcommunities\-expression\fP" 10
+Similar to
+.BR \-communities ,
+but requires all communities inside
+.IR `communities\-expression'
+to be present inside UPDATE message path attributes.
+.P
+Terms can be combined with the following operators (in order of
+decreasing precedence):
+
+.IP "(\ \fIexpression\fR\ )" 10
+Evaluates as true if expression is true, may be used to explicitly control
+precedence.
+
+.IP "\fB!\ \fIexpression\fR\ or\ \fB-not\ \fIexpression\fR" 10
+Negation of expression; the unary NOT operator.
+
+.IP "\fIexpression\ \fB[\-a]\ \fIexpression\fR\ or\ \fIexpression \fB[\-and]\ \fIexpression\fR" 10
+Conjunction of expressions; the AND operator is implicit if no other operator is
+provided inbetween two consecutive expressions, but can be made explicit
+by explicitly inserting the
+.BR \-a
+or
+.BR \-and
+operators.
+The second expression is not evaluated if the first one is false.
+
+.IP "\fIexpression\ \fB\-o\ \fIexpression\fR\ or\ \fIexpression\ \fB\-or\ \fIexpression\fR" 10
+Alternation of expressions; the OR operator. The second expression is not
+evaluated if the first one is true.
+
+.SH "AS_PATH REGULAR EXPRESSIONS"
+.IR @UTILITY@
+uses a specialized regular expression (regexp) style pattern matching approach
+for AS_PATH.
+.P
+AS_PATH regular expressions support most features found in string
+pattern matching, except backreferences, classes and counted repetition.
+.P
+ASN are specified by a numeric value, for example 19819 represents AS19819.
+In their simplest form, AS_PATH expressions match an ASN sequence against
+the merged BGP data AS_PATH (as specified by
+.IR "RFC 4893" ),
+indipendently by its starting position. In the same way
+a regexp would match a string of characters. For example `19819 172' matches
+AS_PATH `AS121
+.BR AS19819
+.BR AS172
+AS1111'.
+.P
+The following features, commonly found in regular expressions, are supported by
+.IR @UTILITY@ :
+.IP "\fIComplements" 10
+The prefix `!' operator can be used to match any but the specified ASN,
+for example `!871' matches any ASN but AS871.
+.IP "\fIAnchors" 10
+`^' and `$' assume a special meaning, they match with the
+beginning and the end, respectively, of the AS_PATH. This allows to assert
+a particular position within the AS_PATH at which an ASN sequence
+is supposed to appear.
+.IP "\fIGrouping and alternation" 10
+Groups can be defined inside regexp by enclosing them inside parentheses, for
+example `( 202 397 )' defines a group with the single ASN sequence
+`AS202 AS397'. The alternation operator `|' provides additional flexibility,
+allowing multiple sequences inside groups, like
+`( 202 397 | 1111 5439 )', which would match both
+`AS1921
+.BR AS202
+.BR AS397 '
+and `AS2431
+.BR AS1111
+.BR AS5439
+AS79'. Alternation can be used even outside groups and alternatives may very
+well be more than two. Groups may be nested.
+.IP "\fIMetacharacters" 10
+The `.' metacharacter can be used to match any ASN in its position.
+The metacharacters `*', `?' and `+' are repetition operators, they can be used
+to match the preceding ASN or group multiple times in different ways. `191*'
+matches AS191 zero or more times, `191?' matches AS191 zero or one time,
+while `191+' matches AS191 one or more times.
+.P
+These features may be combined at will to provide powerful expressions,
+for example `^ !432' matches any AS_PATH that does not start with AS432.
+.P
+Extensive usage examples can be found in the
+.IR EXAMPLES
+section.
+
+.SH "PEER MATCHING EXPRESSIONS"
+Peer matching expressions specify a set of relevant peers, either by
+providing their IP address, their ASN, or both.
+The constructed set is then matched against the peer providing the BGP data
+inside the MRT input files.
+.P
+Allowed constructs are:
+.IP "\fIpeer\-asn\fR" 10
+Only peer ASN is matched for equality.
+.IP "\fIpeer\-address\fR" 10
+Only peer IP address is matched for equality.
+.IP "\(dq\fIpeer\-address\ \fIpeer\-asn\fR\(dq"
+Both peer IP address and ASN are tested for equality.
+.P
+When both IP address and ASN are provided, the match should be quoted
+so that it is understood to be a single match as opposed to one match by
+peer address followed by another match by peer ASN.
+.P
+Multiple peer matches can be provided at the same time by enclosing them in
+parentheses, for example `( \(aq199036\(aq \(aq173.2.2.1 7566\(aq )'
+matches both peer AS199036 and peer AS7566 with IP address 173.2.2.1.
+.P
+Whenever a peer matching expression is expected, a filepath to a text file
+may be specified in its place. In this case
+.IR @UTILITY@
+will read the peer matches directly from file. Matches inside file may be
+separated by either spaces or newlines. No parentheses are necessary, though
+quoting may still be necessary for matches specifying both peer address and
+ASN. Typical C and C++ style comments are supported within the file.
+.P
+See the
+.IR EXAMPLES
+section for usage examples.
+
+.SH "COMMUNITY MATCHING EXPRESSIONS"
+COMMUNITY matching expressions define a set of interesting communities.
+Communities may be specified in any of the following ways:
+.IP \[bu]
+A well-known COMMUNITY name (e.g. BLACKHOLE for COMMUNITY 0xFFFF029A).
+.IP \[bu]
+A hexadecimal numeric COMMUNITY code (e.g. 0xFFFFFF01 for NO_EXPORT).
+.IP \[bu]
+The canonical representation of a COMMUNITY as two fields separated by `:',
+such as `65535:65282' for NO_ADVERTISE. In this form either one of the two
+field, but not both, may be left unspecified by marking it with `*'. In this
+case, communities will be matched only against the specified portion.
+For example `65535:*' matches any COMMUNITY whose first two octets match 65535.
+.P
+Multiple communities may be listed by enclosing them in parentheses,
+for example `( \(aq65535:*\(aq \(aq0:*\(aq )' matches any reserved COMMUNITY
+as per
+.IR "RFC 1997" .
+.P
+Whenever a community matching expression is expected, a filepath to a text file
+may be provided in its place. In this case
+.IR @UTILITY@
+will parse the communities from the file itself. Each COMMUNITY inside file
+may be separated by either spaces or newlines. No parentheses are required.
+Typical C and C++ style comments are supported within the file.
+.P
+See the
+.IR EXAMPLES
+section for usage examples.
+
+.SH "PREFIX MATCHING EXPRESSIONS"
+Prefix matching expressions define a set of interesting networks.
+Networks are specified as prefixes in their CIDR notation, for example
+193.0.0.0/16 or 2001:67c::/32.
+If prefix length is not defined explicitly, it is taken to be the full IP
+address length, that is 32 for IPv4 addresses and 64 for IPv6 addresses.
+.P
+Prefix matching can be restricted to announcements or withdrawals.
+Syntax is:
+.IP "\fB+\fIprefix\fR" 10
+Restrict matching to announcements only.
+.IP "\fB-\fIprefix\fR" 10
+Restrict matching to withdrawals only.
+.P
+If none of `+' or `-' is prepended, then matching takes place on
+both announcements and withdrawals.
+.P
+Multiple prefixes can be specified at the same time by enclosing them in
+parentheses, for example: `( \(aq+193.0.0.0/16\(aq \(aq2001:67c::/32\(aq )'.
+.P
+Whenever a prefix matching expression is expected, a filepath to a text file
+may be specified in its place. In this case
+.IR @UTILITY@
+will parse the relevant prefixes from the file itself. Inside file, prefixes
+may be separated by either spaces or newlines. No parentheses are required.
+Typical C and C++ style comments are supported within the file.
+.P
+See the
+.IR EXAMPLES
+section for usage examples.
+
+.SH "TIMESTAMP MATCHING EXPRESSIONS"
+Timestamp matching expressions define a time point and a matching direction.
+Expressions are matched either to the MRT header timestamp, in case of
+BGP4MP and ZEBRA records (commonly referred to as updates), or to the
+ORIGINATED field in case of TABLE_DUMPV2 or TABLE_DUMP snapshots (commonly
+referred to as RIB snapshots).
+Timestamps may be specified in either of the two following formats:
+.IP \[bu]
+A
+.IR "Unix timestamp"
+in its explicit numeric representation, such as `1622725323', which is
+equivalent to `2021\-06\-03 13:02:03 GMT'.
+Microsecond resolution may be added appending a
+<dot>
+followed by the subsecond part, such as `1622725323.000030'.
+.IP \[bu]
+A human readable
+.IR "RFC 3339"
+UTC timestamp. This format is commonly found in JSON. For example
+`1985\-04\-12T23:20:50.52Z' .
+.P
+Matching direction may be any of the following:
+.IP "\fB>=\fItimestamp\fR" 10
+Matches if BGP data was originated after or exactly at the relevant timestamp.
+.IP "\fB>\fItimestamp\fR" 10
+Matches if BGP data was originated after the relevant timestamp.
+.IP "\fB=\fItimestamp\fR" 10
+Matches if BGP data was originated exactly at the relevant timestamp.
+.IP "\fB<\fItimestamp\fR" 10
+Matches if BGP data was originated before the relevant timestamp.
+.IP "\fB<=\fItimestamp\fR" 10
+Matches if BGP data was originated before or exactly at the relevant timestamp.
+.P
+If no matching direction is provided, `=' is implicitly assumed. See the
+.IR EXAMPLES
+section for usage examples.
+
+.SH "LINE ORIENTED OUTPUT"
+.IR @UTILITY@
+prints each MRT record into multiple lines, each one representing either
+.BR "ROUTE INFORMATION"
+or
+.BR "BGP SESSION STATUS" .
+.P
+.BR "ROUTE INFORMATION"
+can be either an announcement, a route withdrawn or a routing table (RIB)
+snapshot.
+
+Each
+.BR "ROUTE INFORMATION"
+line is a sequence of the following `|' separated fields:
+.RS 4
+.sp
+.RS 4
+.nf
+
+TYPE|PREFIXES|PATH ATTRIBUTES|PEER|TIMESTAMP|ASN32BIT
+.fi
+.P
+.RE
+.P
+Fields have the following meaning:
+
+.IP "\fBTYPE\fR" 4
+Single character describing the route information type, may be `='
+(RIB snapshot entry), `+' (announcement), or `-' (withdrawn).
+
+.IP "\fBPREFIXES\fR" 4
+The list of prefixes carried into the message. If the information is an
+announcement, then this enumerates the prefixes within NLRI and
+MP_REACH_NLRI fields. If the information is a withdrawn, then this
+enumerates the prefixes within WITHDRAWN_ROUTES and MP_UNREACH_NLRI fields.
+If the information is a RIB snapshot entry, then this is the prefix
+related to the current RIB entry.
+Multiple prefixes are separated by a single space.
+
+.IP "\fBPATH ATTRIBUTES\fR" 4
+This is a `|' separated list of the most common BGP path attributes
+characterizing a route. Each field is left empty if the corresponding path
+attribute is not present in the collected BGP data (e.g. route announcements
+without optional attributes, or route withdrawals).
+The currently displayed path attributes are:
+.RS 4
+.sp
+.RS 4
+.nf
+
+AS_PATH|NEXT_HOP|ORIGIN|ATOMIC_AGGREGATE|AGGREGATOR|COMMUNITIES
+.fi
+.P
+.RE
+.P
+If the BGP peer does not support ASN32BIT capability, then the AS_PATH
+field contains the result of the merging procedure between AS_PATH and AS4_PATH
+attributes, according to
+.IR "RFC 4893" ,
+and the AGGREGATOR field contains the AS4_AGGREGATOR attribute (if present).
+Otherwise, AS_PATH and AGGREGATOR fields contain the respective attribute.
+.P
+NEXT_HOP field contains either the NEXT_HOP attribute (IPv4) or the next hop
+address(es) listed into the MP_REACH_NLRI attribute (IPv6), as described in
+.IR "RFC 4760" .
+.P
+ORIGIN contains the corresponding attribute encoded as a single character,
+`i' (IGP), `e' (EGP), `?' (INCOMPLETE).
+.P
+ATOMIC_AGGREGATE field contains
+.BR "AT"
+if the attribute is set, it is left empty otherwise.
+.P
+COMMUNITIES field contains both COMMUNITY (
+.IR "RFC 1997"
+) and LARGE_COMMUNITY (
+.IR "RFC 8092"
+) displayed in their canonical representation. Well\-known communities are
+displayed according to their IANA assigned names (e.g. NO_EXPORT instead of
+`65535:65281').
+.P
+.RE
+
+.IP "\fBPEER\fP" 4
+The BGP peer that provided the BGP message.
+If the peer uses the ADD\-PATH extension (
+.IR "RFC 7911"
+) to announce BGP data, then it is displayed as `peer\-address peer\-asn
+path\-id', otherwise as `peer\-address peer\-asn'.
+
+.IP "\fBTIMESTAMP\fP" 4
+Displays the Unix epoch time at which the information was collected.
+If extended timestamp information is available, the Unix Epoch time is followed
+by a `.' and the microsecond precision is appended right after it. Timestamp is
+displayed as a raw numerical value.
+
+.IP "\fBASN32BIT\fP" 4
+May be either 1, if BGP data has ASN32BIT capability, or 0.
+.P
+.RE
+
+The
+.BR "BGP SESSION STATUS"
+is encoded as a BGP session state change according to
+.IR "RFC 6936" ", " "Section 4.4.1" .
+The format of a line representing a state change is the following:
+.RS 4
+.sp
+.RS 4
+.nf
+
+#|OLD_STATE-NEW_STATE|||||||PEER|TIMESTAMP|ASN32BIT
+.fi
+.P
+.RE
+.P
+Each field has the following format:
+
+.IP "\fBOLD_STATE\-NEW_STATE\fP" 4
+Represents the old and new state of the BGP session respectively,
+according to the BGP Finite State Machine states numerical codes.
+
+.IP "\fBPEER, TIMESTAMP, ASN32BIT\fP" 4
+Have identical format and meaning with regards to the
+.BR "ROUTING INFORMATION"
+case.
+.P
+.RE
+
+Each line produced always has the same `|' character count, in both
+.BR "ROUTING INFORMATION" 's
+and
+.BR "BGP SESSION STATUS" 's
+case. This facilitates the task of writing simple scripts that manipulate
+.IR @UTILITY@ 's
+output text.
+
+.SH "EXIT STATUS"
+The following exit values are returned:
+.IP "\00" 6
+All input data was scanned successfully,
+and data was written to output correctly.
+.IP >0 6
+Errors were detected in input data, write error occurred,
+or an unrecoverable error occurred (such as out of memory errors).
+
+.SH STDIN
+The standard input is used only if no
+.IR FILES
+arguments are provided, or when any of the specified
+.IR FILES
+arguments is `\-' , in which case MRT data is read from standard input at that
+point, up to an <end\-of\-file>.
+.P
+Whenever
+.IR @UTILITY@
+reads from standard input, MRT data is assumed to be uncompressed.
+
+.SH "INPUT FILES"
+.IR @UTILITY@
+supports most MRT dump formats as written by the majority of Route Collecting
+projects (see the
+.IR STANDARDS
+section below for additional references).
+MRT dumps may be provided either in their plain uncompressed form, or
+as files compressed by
+.IR gzip (1),
+.IR bzip2 (1),
+or
+.IR xz (1).
+.IR @UTILITY@
+performs appropriate decompression on the fly.
+File extension is used, in a case insensitive way, to discriminate among
+supported compression formats. If the file extension is not recognized,
+or there is no extension, then it is assumed to be uncompressed.
+
+.SH STDOUT
+The standard output is used to print a human readable text representation of
+BGP message data, nothing else shall be written to the standard output.
+.IR @UTILITY@
+may detect and treat as error whenever the standard output is a regular file,
+and is the same file as any of the
+.IR FILES
+arguments.
+The default output format used by
+.IR @UTILITY@
+is documented in the
+.IR "LINE ORIENTED OUTPUT"
+section.
+
+.SH STDERR
+The standard error is used only for diagnostic messages and error reporting.
+Any BGP message output is exclusive to standard output.
+
+.SH EXAMPLES
+This section contains some useful examples, starting from trivial ones,
+demonstrating basic
+.IR @UTILITY@
+usage, to more complex ones employing sophisticated filtering predicates.
+Examples in this section use paranoid quoting, since this a worthwhile habit
+that eliminates potential pitfalls introduced by shell expansion.
+
+.IP \[bu]
+The following is the simplest way to invoke
+.IR @UTILITY@ :
+.nf
+\&
+.in +2m
+@UTILITY@
+.in
+\&
+.fi
+It formats and prints all the BGP data it inside the uncompressed MRT
+input data it receives from standard input.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ -- -peer \(aq199036\(aq
+.in
+\&
+.fi
+finds all BGP data announced by peer AS199036, taking MRT input data
+implicitly from standard input. Notice how an explicit `\-\-' is necessary
+for
+.IR @UTILITY@
+to interpret
+.BR \-peer
+as an actual
+.IR EXPRESSION
+operand, rather than incorrectly mistaking it for
+.IR OPTIONS.
+
+.IP \[bu]
+The following is equivalent to the previous example:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.1.bz2 -peer \(aq199036\(aq
+.in
+\&
+.fi
+but takes MRT input data from a
+.IR bzip (1),
+compressed file. The file argument removes the necessity of an explicit `\-\-'
+to separate
+.IR FILES
+and
+.IR EXPRESSION
+operands.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./updates.*.gz -aspath \(aq^199036\(aq
+.in
+\&
+.fi
+finds every message whose first ASN in AS_PATH is AS199036, inside all
+.IR gzip (1)
+compressed files resulting from the glob expansion.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./updates.*.gz -aspath \(aq3333$\(aq
+.in
+\&
+.fi
+is similar to the previous example, but uses
+.IR "AS_PATH REGULAR EXPRESSIONS"
+to find every BGP message whose last ASN in AS_PATH is AS3333.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./updates.*.gz -aspath \(aq174 3356\(aq
+.in
+\&
+.fi
+demonstrates yet another basic use of
+.IR "AS_PATH REGULAR EXPRESSIONS"
+to find every BGP message whose AS_PATH crosses link AS174 AS3356.
+Notice how the argument of
+.BR \-aspath
+needs quoting.
+
+.IP \[bu]
+The following command demonstrates a more advanced use of
+.IR "AS_PATH REGULAR EXPRESSIONS":
+.nf
+\&
+.in +2m
+@UTILITY@ ./updates.*.gz -aspath \(aq174 (2603+|202+|303+) 3356\(aq
+.in
+\&
+.fi
+It finds every BGP message whose AS_PATH crosses AS174 and AS3356, through one
+intermediate ASN among AS2603, AS202, or AS303. It also takes care of possible
+prepending for the inbetween ASN.
+
+.IP \[bu]
+The following commands are equivalent:
+.nf
+\&
+.in +2m
+@UTILITY@ ./updates.*.gz -aspath \(aq^7854 .* 5032$\(aq -or -aspath \(aq109 .* 9081$\(aq
+@UTILITY@ ./updates.*.gz -aspath \(aq^7854 .* 5032$ | ^109 .* 9081$\(aq
+.in
+\&
+.fi
+They both find every BGP message whose AS_PATH starts at AS7854 and terminates
+at AS5032, or starts at AS109 and terminates at AS9081.
+The second being the most efficient.
+This example illustrates the use of alternation inside
+.IR "AS_PATH REGULAR EXPRESSIONS"
+to test multiple patterns at the same time.
+
+.IP \[bu]
+The following example:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.*.xz -subnet \(aq192.65.0.0/16\(aq -aspath \(aq174 137\(aq
+.in
+\&
+.fi
+finds all subnets of 192.65.0.0/16 crossing link AS174 AS137.
+It combines two
+.IR EXPRESSION
+terms with an implicit AND operator, since no explicit
+.BR \-and
+and no
+.BR \-or
+was provided, as detailed by the
+.IR OPERANDS
+section.
+
+.IP \[bu]
+The following commands are equivalent:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.*.gz \e( -subnet \(aq193.0.0.0/16\(aq -or -subnet \(aq2001:67c::/32\(aq \e) -aspath \(aq3333$\(aq
+@UTILITY@ ./rib.*.gz -subnet \e( \(aq193.0.0.0/16\(aq \(aq2001:67c::/32\(aq \e) -aspath \(aq3333$\(aq
+.in
+\&
+.fi
+They both print every message containing subnets of 193.0.0.0/16 or
+2001:67c::/32 destinated to AS3333, the second being a more efficient
+alternative. In the latter, notice the use of `(' and `)' inside
+.BR \-subnet
+to provide multiple arguments.
+This behavior is further explained in the
+.IR "PREFIX MATCHING EXPRESSIONS"
+section, and is common to most matching expressions provided by
+.IR @UTILITY@ .
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.*.bz2 -peer \(aq202\(aq -timestamp \(aq>=2012-10-01\(aq -timestamp \(aq<2012-11-01\(aq -loops
+.in
+\&
+.fi
+is another example combining multiple
+.IR EXPRESSION
+terms to achieve complex filtering. It scans all
+.IR bzip2 (1)
+compressed MRT input files resulting from glob expansion,
+and prints every BGP message provided by peer AS202 during the month of
+October, 2012 containing loops in its AS_PATH.
+Notice how multiple
+.BR \-timestamp
+terms can be combined to effectively define bounded time ranges.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.*.bz2 -communities \e( \(aq0:*\(aq \(aq65535:*\(aq \e) -peer \(aq185.169.236.135 201\(aq
+.in
+\&
+.fi
+prints all the BGP messages containing reserved communities, provided by peer
+AS201 with IP address 185.169.236.135.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.*.bz2 -all-communities ./commlist.tpl -subnet ./netlist.tpl
+.in
+\&
+.fi
+demonstrates the use of filepath arguments for
+.BR \-all\-communities
+and
+.BR \-subnet
+.IR EXPRESSION
+terms.
+.IR bgpgrep
+will parse the two text files and use their contents as arguments.
+This is especially useful to create templates containing relevant networks,
+communities, or peers and reuse them across various runs.
+
+.SH "APPLICATION USAGE"
+The
+.IR @UTILITY@
+utility and its filtering engine have been designed for performance.
+Providing predicates has the double role of cleaning the output of irrelevant
+data, without resorting to complex scripting, and avoid wasting time to
+decode useless data. Therefore
+.IR @UTILITY@
+can gain a lot performance\-wise when provided with restrictive predicates,
+that cut away significant amounts of BGP data from its input files.
+.P
+.IR @UTILITY@
+deliberately mimics the
+.IR find (1)
+utility operands convention, in an attempt to feel familiar to the experienced
+shell user and provide a powerful
+.IR EXPRESSION
+syntax that feels both expressive and readable.
+Though, many of
+.IR find (1)'s
+subtleties also apply to
+.IR bgpgrep .
+When writing
+.IR EXPRESSION ,
+it should be noted that `!', `(', `<' and `>' have special meaning to the shell,
+and should be quoted accordingly.
+.IR @UTILITY@
+provides the alternative
+.BR \-not
+syntax for the unary NOT
+.BR !
+operator that avoids the problem. Still, care should be used with other
+.IR EXPRESSION
+terms arguments. When in doubt use explicit quotes, as demonstrated in the
+.IR EXAMPLES
+section.
+.P
+.IR @UTILITY@
+attempts to provide descriptive output for syntax errors that should help
+with most of these problems.
+.P
+Another common source of errors is the distinction between
+.IR FILES
+and
+.IR EXPRESSION .
+.IR bgpgrep
+treats any operand starting with `\-' and followed by at least one character
+as the beginning of an
+.IR EXPRESSION ,
+and an actual `\-' as a placeholder for standard input (see
+.IR STDIN
+and
+.IR OPERANDS
+sections for details). In the unlikely event of having to deal with files
+that may generate ambiguity (e.g. a file named `\-'), make the file reference
+explicit by prepending `./' (e.g. `./\-' to reference a file named `\-' in the
+current directory).
+If the
+.IR FILES
+list should be left empty, but an
+.IR EXPRESSION
+should still be applied, then provide an explicit `\-\-' to mark the empty file
+list, as shown in the
+.IR EXAMPLES
+section.
+
+.SH SEE ALSO
+.IR awk (1),
+.IR grep (1)
+
+.SH STANDARDS
+The
+.IR @UTILITY@
+utility conforms to:
+.IP \[bu] 2m
+.IR "RFC 6396" " \-" "Multi\-Threaded Routing Toolkit (MRT) Routing Information Export Format"
+.IP \[bu] 2m
+.IR "RFC 8050" " \- " "Multi\-Threaded Routing Toolkit (MRT) Routing Information Export Format with BGP Additional Path Extensions"
+.IP \[bu] 2m
+.IR "IANA Border Gateway Protocol (BGP) Well\-known Communities" ". Updated list of well\-known communities as of 2021\-05\-07."
+
+.SH AUTHOR
+.IR @UTILITY@
+was written by
+.UR lcg@\:inventati.\:org
+Lorenzo Cogotti
+.UE .
+.IR @UTILITY@
+is an evolution over
+.IR bgpscanner
+originally developed by the same author at the Institute of Informatics and
+Telematics of the Italian National Research Council (IIT\-CNR),
+with significant contributions by the Isolario project development team at
+the time.

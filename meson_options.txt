@@ -1,0 +1,5 @@
+option('native', type : 'boolean', value : false, description : 'Optimize build for local CPU architecture (ties build artifacts to your local machine!)')
+option('build-doc', type : 'boolean', description : 'Build documentation using doxygen')
+# TODO option('build-benchmarks', type : 'boolean', value : false, description : 'Build benchmarks')
+# TODO option('build-tests', type : 'boolean', value : false, description : 'Build unit tests')
+option('build-bgpgrep', type : 'boolean', description : 'Build bgpgrep MRT/BGP parsing and filting utility')
