@@ -85,7 +85,7 @@ struct Timestampop {
 // ==================================
 // Non Local Jumps - error management
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 // Faster alternative, less taxing than standard setjmp(), but comes with
 // a few gotchas: https://gcc.gnu.org/onlinedocs/gcc/Nonlocal-Gotos.html
 typedef Sintptr frame_buf[5];
