@@ -341,7 +341,9 @@ Judgement Bgp_RebuildMsgFromRib(const Prefix     *nlri,
 						goto error;  // error already set
 
 					// Rebuild attribute on the fly with original AFI and SAFI
-					Bgpattr *mpUnreach = (Bgpattr *) alloca(3 + 2 + 1);
+					attrSiz = 3 + 2 + 1;
+
+					Bgpattr *mpUnreach = (Bgpattr *) alloca(attrSiz);
 					mpUnreach->flags = flags;
 					mpUnreach->code  = BGP_ATTR_MP_UNREACH_NLRI;
 					mpUnreach->len   = 3;
