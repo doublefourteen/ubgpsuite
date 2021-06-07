@@ -766,7 +766,6 @@ void Bgp_VmDoAsmtch(Bgpvm *vm)
 	}
 	if (!BGP_VMCHKMSGTYPE(vm, BGP_UPDATE)) {
 		Bgp_VmStoreMsgTypeMatch(vm, /*isMatching=*/FALSE);
-		BGP_VMPUSH(vm, FALSE);
 		return;
 	}
 
@@ -821,7 +820,6 @@ void Bgp_VmDoFasmtc(Bgpvm *vm)
 	}
 	if (!BGP_VMCHKMSGTYPE(vm, BGP_UPDATE)) {
 		Bgp_VmStoreMsgTypeMatch(vm, /*isMatching=*/FALSE);
-		BGP_VMPUSH(vm, FALSE);
 		return;
 	}
 

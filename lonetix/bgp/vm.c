@@ -331,6 +331,8 @@ cant_run:
 
 Judgement Bgp_VmStoreMsgTypeMatch(Bgpvm *vm, Boolean isMatching)
 {
+	BGP_VMPUSH(vm, isMatching);
+
 	vm->curMatch = (Bgpvmmatch *) Bgp_VmTempAlloc(vm, sizeof(*vm->curMatch));
 	if (!vm->curMatch) UNLIKELY
 		return NG;
@@ -462,8 +464,6 @@ void Bgp_VmDoChkt(Bgpvm *vm, BgpType type)
 		return;
 
 	Boolean isMatching = (BGP_VMCHKMSGTYPE(vm, type) != NULL);
-
-	BGP_VMPUSH(vm, isMatching);
 	Bgp_VmStoreMsgTypeMatch(vm, isMatching);
 }
 
