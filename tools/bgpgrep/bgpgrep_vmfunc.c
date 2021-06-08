@@ -174,6 +174,10 @@ void BgpgrepF_FindAsLoops(Bgpvm *vm)
 	Asntree t;
 	Asn     asn;
 
+	const Bgphdr *hdr = BGP_HDR(vm->msg);
+	if (hdr->type != BGP_UPDATE)
+		goto nomatch;
+
 	Sint32  pos = 0;
 	Boolean foundLoop = FALSE;
 
