@@ -396,7 +396,7 @@ static Expropc GetOp(void)
 			// e.g. ( -type ORIGIN -or -type AGGREGATOR )
 			//
 			// In this case we should return OP_NONE to signal
-			// expression and, propagating out of ParseExpression()
+			// expression end, propagating out of ParseExpression()
 			if (strcmp(tok, ")") != 0) {
 				C.wasImplicitAnd = TRUE;
 
