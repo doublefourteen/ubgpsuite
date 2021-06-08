@@ -434,6 +434,17 @@ static void DumpMrtInfoTrailer(Stmbuf *sb, const Dumpfmtctx *ctx)
 	Bufio_Puts(sb, EOLN);
 }
 
+static void WarnCorrupted(Stmbuf *sb, const Dumpfmtctx *ctx)
+{
+	Bufio_Putc(sb, SEP_CHAR_BAD);
+	if (ctx->withColors)
+		Bufio_Puts(sb, CORRUPT_WARN);
+	else
+		Bufio_Puts(sb, VTSGR(VTINV) CORRUPT_WARN VTSGR(VTNOINV));
+
+	Bufio_Putc(sb, SEP_CHAR_BAD);
+}
+
 static Sint32 DumpRoutesFast(char              marker,
                              Stmbuf           *sb,
                              Bgpmpiter        *prefixes,
@@ -693,13 +704,7 @@ static Judgement DumpBgp(Stmbuf        *sb,
 	return OK;
 
 corrupted:
-	Bufio_Putc(sb, SEP_CHAR_BAD);
-	if (ctx->withColors)
-		Bufio_Puts(sb, CORRUPT_WARN);
-	else
-		Bufio_Puts(sb, VTSGR(VTINV) CORRUPT_WARN VTSGR(VTNOINV));
-
-	Bufio_Putc(sb, SEP_CHAR_BAD);
+	WarnCorrupted(sb, ctx);
 	return NG;
 }
 
@@ -994,11 +999,18 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 		const Bgphdr *msg    = (const Bgphdr *) ((Uint8 *) bgp4mp + offset);
 		size_t        nbytes = len - offset;
 
-		nbytes  = Bgp_CheckMsgHdr(msg, nbytes, /*allowExtendedSize=*/TRUE);
-		nbytes -= BGP_HDRSIZ;
-
-		DumpBgp(&sb, msg->type, msg + 1, nbytes, table, &ctx);
-
+		nbytes = Bgp_CheckMsgHdr(msg, nbytes, /*allowExtendedSize=*/TRUE);
+		if (nbytes != 0) {
+			// Header is OK
+			nbytes -= BGP_HDRSIZ;
+			DumpBgp(&sb, msg->type, msg + 1, nbytes, table, &ctx);
+		} else {
+			// Corrupted BGP4MP with invalid BGP data
+			Bufio_Putc(&sb, UNKNOWN_MARKER);
+			Bufio_Putc(&sb, SEP_CHAR);
+			WarnCorrupted(&sb, &ctx);
+			DumpMrtInfoTrailer(&sb, &ctx);
+		}
 	} else {
 		// Deprecated/Unknown type
 		Bufio_Putc(&sb, UNKNOWN_MARKER);
