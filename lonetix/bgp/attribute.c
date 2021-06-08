@@ -335,7 +335,6 @@ Judgement Bgp_RebuildMsgFromRib(const Prefix     *nlri,
 				}
 				if (flags & BGPF_CLEARUNREACH) {
 					// Keep the attribute, but clear its contents
-					Uint8           flags  = attr->flags;
 					const Bgpmpfam *srcFam = Bgp_GetMpFamily(attr);
 					if (!srcFam)
 						goto error;  // error already set
@@ -344,7 +343,7 @@ Judgement Bgp_RebuildMsgFromRib(const Prefix     *nlri,
 					attrSiz = 3 + 2 + 1;
 
 					Bgpattr *mpUnreach = (Bgpattr *) alloca(attrSiz);
-					mpUnreach->flags = flags;
+					mpUnreach->flags = attr->flags & ~BGP_ATTR_EXTENDED;
 					mpUnreach->code  = BGP_ATTR_MP_UNREACH_NLRI;
 					mpUnreach->len   = 3;
 
