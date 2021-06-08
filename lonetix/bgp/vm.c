@@ -519,7 +519,6 @@ static Judgement Bgp_VmStartNets(Bgpvm *vm, Bgpmpiter *it, Uint8 mode)
 	case BGP_VMOPA_ALL_WITHDRAWN:
 		Bgp_StartAllMsgWithdrawn(it, vm->msg);
 		break;
-		
 	default: UNLIKELY;
 		vm->errCode = BGPEVMBADOP;
 		return NG;
