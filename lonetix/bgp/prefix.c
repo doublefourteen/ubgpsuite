@@ -133,14 +133,10 @@ Judgement Bgp_StartPrefixes(Prefixiter *it,
                             size_t      nbytes,
                             Boolean     isAddPath)
 {
-	if (afi != AFI_IP && afi != AFI_IP6) {
-		Bgp_SetErrStat(BGPEAFIUNSUP);
-		return NG;
-	}
-	if (safi != SAFI_UNICAST && safi != SAFI_MULTICAST) {
-		Bgp_SetErrStat(BGPESAFIUNSUP);
-		return NG;
-	}
+	if (afi != AFI_IP && afi != AFI_IP6)
+		return Bgp_SetErrStat(BGPEAFIUNSUP);
+	if (safi != SAFI_UNICAST && safi != SAFI_MULTICAST)
+		return Bgp_SetErrStat(BGPESAFIUNSUP);
 
 	it->afi       = afi;
 	it->safi      = safi;
@@ -149,8 +145,7 @@ Judgement Bgp_StartPrefixes(Prefixiter *it,
 	it->lim       = it->base + nbytes;
 	it->ptr       = it->base;
 
-	Bgp_SetErrStat(BGPENOERR);
-	return OK;
+	return Bgp_SetErrStat(BGPENOERR);
 }
 
 void *Bgp_NextPrefix(Prefixiter *it)
