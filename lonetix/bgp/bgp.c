@@ -378,10 +378,8 @@ Judgement Bgp_StartAllMsgWithdrawn(Bgpmpiter *it, Bgpmsg *msg)
 	it->nextAttr = Bgp_GetMsgAttribute(msg, BGP_ATTR_MP_UNREACH_NLRI);
 	if (!it->nextAttr && Bgp_GetErrStat(NULL))
 		return NG;
-	if (Bgp_StartMsgWithdrawn(&it->rng, msg) != OK)
-		return NG;
 
-	return OK;
+	return Bgp_StartMsgWithdrawn(&it->rng, msg);
 }
 
 void Bgp_InitMpWithdrawn(Bgpmpiter             *it,
@@ -427,10 +425,8 @@ Judgement Bgp_StartAllMsgNlri(Bgpmpiter *it, Bgpmsg *msg)
 	it->nextAttr = Bgp_GetMsgAttribute(msg, BGP_ATTR_MP_REACH_NLRI);
 	if (!it->nextAttr && Bgp_GetErrStat(NULL))
 		return NG;
-	if (Bgp_StartMsgNlri(&it->rng, msg) != OK)
-		return NG;
 
-	return OK;
+	return Bgp_StartMsgNlri(&it->rng, msg);
 }
 
 Prefix *Bgp_NextMpPrefix(Bgpmpiter *it)
