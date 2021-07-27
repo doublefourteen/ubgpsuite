@@ -175,7 +175,8 @@ static void Peerindex_ApplyProgramOptions(void)
 
 static void Peerindex_Init(void)
 {
-	S.rec.allocp = S.rec.allocp = &bgp_msgBuf;
+	S.rec.allocp = &bgp_msgBuf;
+	S.rec.memOps = Mem_BgpBufOps;
 }
 
 static const StmOps *Peerindex_OpenMrtDump(const char *filename, void **phn)
