@@ -233,6 +233,7 @@ static void Peerindex_MarkPeerRefs(void)
 		Uint16 idx = beswap16(rib->peerIndex);
 		if (idx >= S.npeers) {
 			Peerindex_Warning("CORRUPT MRT RECORD: Peer index '%u' is out of range", (unsigned) idx);
+			S.nerrors++;
 			continue;
 		}
 
