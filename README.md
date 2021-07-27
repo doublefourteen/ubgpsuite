@@ -32,8 +32,8 @@ Extensive documentation of `lonetix` and its API is available.
 
 # Utilities
 
-`lonetix` is the building block of `bgpgrep`, this far our single
-utility - but more of them are coming, right?
+`lonetix` is the building block of `bgpgrep` and `peerindex`, this far our
+only two utilities - but more of them are coming, right?
 
 `bgpgrep` performs fast and reliable analysis of MRT dumps
 collected by most Route Collecting projects. It takes a different
@@ -41,6 +41,10 @@ turn compared to most similar tools, in that it provides extensive
 filtering utilities, in order to extrapolate only relevant data
 out of each MRT dump (and incidentally save quite some time).
 In-depth documentation of `bgpgrep` is available in its man page.
+
+`peerindex` allows to quickly inspect the peer index table record inside
+MRT TABLE_DUMP_V2 RIBs. Just like `bgpgrep`, documentation is
+available in a dedicated man page.
 
 # Building
 
