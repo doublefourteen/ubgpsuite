@@ -1,0 +1,247 @@
+'\" et
+.TH PEERINDEX 1 @VERSION@ PEERINDEX "User Commands"
+.\"
+.SH NAME
+@UTILITY@
+\(em filter and print BGP data within MRT dumps
+.SH SYNOPSIS
+.LP
+.nf
+@UTILITY@ \fB[\fIOPTIONS\fB]\fR... \fB[\fIFILES\fB]\fR...
+.fi
+
+.SH DESCRIPTION
+The
+.IR @UTILITY@
+utility reads each possibly compressed Multithreaded Routing Toolkit
+(MRT)
+Routing Information Base
+(RIB)
+file specified by
+.IR FILES ,
+and extracts information related to PEER INDEX TABLE
+records.
+.IR @UTILITY@
+processes and formats such records according to the options specified by
+.IR OPTIONS .
+.IR @UTILITY@
+prints diagnostics to standard error,
+it detects and tolerates data corruption as much as possible.
+If data corruption cannot be tolerated, the entire MRT dump file is dropped,
+.IR @UTILITY@
+will then move to the next file in
+.IR FILES ,
+if any.
+.P
+Such events are always reported with reasonable diagnostic errors.
+.P
+See the
+.IR EXAMPLES
+section below for usage examples.
+
+.SH OPTIONS
+The following options are supported:
+
+.IP "\fB\-r or \-\-only\-refs\fP" 10
+By default
+.IR @UTILITY@
+writes all PEER INDEX TABLE entries, this option causes
+.IR @UTILITY@
+to only print peers that are referenced by RIB entries.
+
+.IP "\fB\-h or \-\-help\fP" 10
+Prints a short help message, summarizing
+.IR @UTILITY@
+functionality.
+
+.IP "\fB\-?\fP" 10
+Equivalent to
+.BR \-h .
+
+.SH "LINE ORIENTED OUTPUT"
+.IR @UTILITY@
+splits each PEER INDEX TABLE record into multiple lines, every line represents a peer.
+Note that
+.IR OPTIONS
+may cause some peers inside PEER INDEX TABLES to be discarded (See the
+.IR OPTIONS
+section for details).
+
+
+Each peer is formatted as the following `|' separated fields:
+.RS 4
+.sp
+.RS 4
+.nf
+
+PEER ENTRY|ASN32BIT
+.fi
+.P
+.RE
+.P
+Fields have the following meaning:
+
+.IP "\fBPEER ENTRY\fP" 4
+The peer entry inside PEER INDEX TABLE, displayed as `peer\-address peer\-asn'.
+
+.IP "\fBASN32BIT\fP" 4
+May be either 1, if the peer AS number was encoded within 32 bits, or 0 otherwise.
+.P
+Note that this flag being 0 does not necessarily imply that the peer does not have
+ASN32BIT capability, it is merely an indicator of how the peer entry was encoded within
+the PEER INDEX TABLE record (namely, it only used 2 octets to encode its ASN).
+.P
+.RE
+
+Multiple PEER INDEX TABLES are concatenated within the output, meaning that
+the same peer appearing in multiple PEER INDEX TABLE records may appear twice in
+.IR @UTILITY@
+output.
+
+.SH "EXIT STATUS"
+The following exit values are returned:
+.IP "\00" 6
+All input data was scanned successfully,
+and data was written to output correctly.
+.IP >0 6
+Errors were detected in input data, write error occurred,
+or an unrecoverable error occurred (such as out of memory errors).
+
+.SH STDIN
+The standard input is used only if no
+.IR FILES
+arguments are provided, or when any of the specified
+.IR FILES
+arguments is `\-' , in which case MRT data is read from standard input at that
+point, up to an <end\-of\-file>.
+.P
+Whenever
+.IR @UTILITY@
+reads from standard input, MRT data is assumed to be uncompressed.
+
+.SH "INPUT FILES"
+.IR @UTILITY@
+supports most MRT dump formats as written by the majority of Route Collecting
+projects (see the
+.IR STANDARDS
+section below for additional references).
+MRT dumps may be provided either in their plain uncompressed form, or
+as files compressed by
+.IR gzip (1),
+.IR bzip2 (1),
+or
+.IR xz (1).
+.IR @UTILITY@
+performs appropriate decompression on the fly.
+File extension is used, in a case insensitive way, to discriminate among
+supported compression formats. If the file extension is not recognized,
+or there is no extension, then it is assumed to be uncompressed.
+
+.SH STDOUT
+The standard output is used to print a human readable text representation of
+PEER INDEX TABLE contents, nothing else shall be written to the standard output.
+.IR @UTILITY@
+may detect and treat as error whenever the standard output is a regular file,
+and is the same file as any of the
+.IR FILES
+arguments.
+The default output format used by
+.IR @UTILITY@
+is documented in the
+.IR "LINE ORIENTED OUTPUT"
+section.
+
+.SH STDERR
+The standard error is used only for diagnostic messages and error reporting.
+
+.SH EXAMPLES
+This section contains some useful examples, demonstrating basic
+.IR @UTILITY@
+usage.
+
+.IP \[bu]
+The following is the simplest way to invoke
+.IR @UTILITY@ :
+.nf
+\&
+.in +2m
+@UTILITY@
+.in
+\&
+.fi
+It formats and prints all peers inside the uncompressed MRT
+RIB input data it receives from standard input.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ -r
+.in
+\&
+.fi
+formats and print only peer entries referenced by at least one RIB entry
+inside the uncompressed MRT RIB input data coming from standard input.
+
+.IP \[bu]
+The following is equivalent to the previous example:
+.nf
+\&
+.in +2m
+@UTILITY@ -r ./rib.1.bz2
+.in
+\&
+.fi
+but takes MRT input data from a
+.IR bzip (1)
+compressed file.
+
+.IP \[bu]
+The following is equivalent to the previous example:
+.nf
+\&
+.in +2m
+@UTILITY@ -r ./rib.*.gz
+.in
+\&
+.fi
+but takes MRT input data from multiple
+.IR gzip (1)
+compressed files resulting from the glob expansion.
+Most likely the command output is going to
+contain data coming from multiple PEER INDEX TABLES,
+peers may appear more than once.
+
+.IP \[bu]
+The following command:
+.nf
+\&
+.in +2m
+@UTILITY@ ./rib.*.gz
+.in
+\&
+.fi
+is similar to the previous example, but does not remove
+unreferenced peer entries from output.
+
+.SH SEE ALSO
+.IR bgpgrep (1),
+.IR awk (1),
+.IR grep (1)
+
+.SH STANDARDS
+The
+.IR @UTILITY@
+utility conforms to:
+.IP \[bu] 2m
+.IR "RFC 6396" " \-" "Multi\-Threaded Routing Toolkit (MRT) Routing Information Export Format"
+.IP \[bu] 2m
+.IR "RFC 8050" " \- " "Multi\-Threaded Routing Toolkit (MRT) Routing Information Export Format with BGP Additional Path Extensions"
+
+.SH AUTHOR
+.IR @UTILITY@
+was written by
+.UR lcg@\:inventati.\:org
+Lorenzo Cogotti
+.UE .
