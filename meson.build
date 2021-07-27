@@ -134,3 +134,25 @@ if get_option('build-bgpgrep')
 
     install_man(bgpgrep_man)
 endif
+if get_option('build-peerindex')
+    peerindex = executable('peerindex',
+        sources : [
+            'tools/peerindex/peerindex.c'
+        ],
+        include_directories : [ lonetix_incdir ],
+        dependencies : [ lonetix_dep ],
+        install : true
+    )
+
+    cdata = configuration_data({
+        'UTILITY': 'peerindex',
+        'VERSION':  '"' + meson.project_version() + '"',
+    })
+
+    peerindex_man = configure_file(input : 'tools/peerindex/peerindex.1.in',
+                                   output : 'peerindex.1',
+                                   configuration : cdata,
+                                   install : false)
+
+    install_man(peerindex_man)
+endif

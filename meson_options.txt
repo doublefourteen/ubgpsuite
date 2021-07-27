@@ -3,3 +3,4 @@ option('build-doc', type : 'boolean', description : 'Build documentation using d
 # TODO option('build-benchmarks', type : 'boolean', value : false, description : 'Build benchmarks')
 # TODO option('build-tests', type : 'boolean', value : false, description : 'Build unit tests')
 option('build-bgpgrep', type : 'boolean', description : 'Build bgpgrep MRT/BGP parsing and filting utility')
+option('build-peerindex', type : 'boolean', description : 'Build peerindex MRT TABLE_DUMPV2 Peer Index Table inspection tool')
