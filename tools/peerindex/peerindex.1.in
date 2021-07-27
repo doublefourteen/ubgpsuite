@@ -3,7 +3,7 @@
 .\"
 .SH NAME
 @UTILITY@
-\(em filter and print BGP data within MRT dumps
+\(em inspect MRT TABLE_DUMPV2 Peer Index Table
 .SH SYNOPSIS
 .LP
 .nf
