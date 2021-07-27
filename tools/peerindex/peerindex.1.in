@@ -70,8 +70,6 @@ section for details).
 
 Each peer is formatted as the following `|' separated fields:
 .RS 4
-.sp
-.RS 4
 .nf
 
 PEER ENTRY|ASN32BIT
@@ -226,7 +224,6 @@ is similar to the previous example, but does not remove
 unreferenced peer entries from output.
 
 .SH SEE ALSO
-.IR bgpgrep (1),
 .IR awk (1),
 .IR grep (1)
 
