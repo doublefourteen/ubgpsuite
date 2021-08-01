@@ -17,7 +17,7 @@
 #include <assert.h>
 #include <string.h>
 
-// NOTE: Each dump function is *RESPONSIBLE* to set S.dropEntryFrame
+// NOTE: TABLE_DUMPV2 RIBs may alter S.dropMsgFrame
 
 static void FixBgpAttributeTableForRib(Bgpattrtab tab, Boolean isRibv2)
 {
@@ -79,10 +79,10 @@ void BgpgrepD_Bgp4mp(void)
 
 	if (BGP4MP_ISSTATECHANGE(hdr->subtype)) {
 		OutputBgp4mp(hdr, NULL);
-		goto done;
+		return;
 	}
 	if (!BGP4MP_ISMESSAGE(hdr->subtype))
-		goto done;  // don't care for anything else
+		return;  // don't care for anything else
 
 	// NOTE: Optimizing BGP4MP to avoid message rebuild isn't worth the effort
 
@@ -99,9 +99,6 @@ void BgpgrepD_Bgp4mp(void)
 		OutputBgp4mp(hdr, S.msg.table);
 
 	Bgp_ClearMsg(&S.msg);
-
-done:
-	Bgp_ClearMrt(&S.rec);
 }
 
 static void OutputZebra(const Mrthdr *hdr, Bgpattrtab tab)
@@ -118,17 +115,16 @@ void BgpgrepD_Zebra(void)
 
 	if (hdr->subtype == ZEBRA_STATE_CHANGE) {
 		OutputZebra(hdr, NULL);
-		goto done;
+		return;
 	}
 	if (!ZEBRA_ISMESSAGE(hdr->subtype))
-		goto done;  // don't care for anything else
+		return;  // don't care for anything else
 
 	if (S.isTrivialFilter) {
 		// FAST PATH - avoid rebuilding original message
 		BGP_CLRATTRTAB(S.msg.table);
 		OutputZebra(hdr, S.msg.table);
-
-		goto done;
+		return;
 	}
 
 	// FILTERING PATH - Setup filter
@@ -145,9 +141,6 @@ void BgpgrepD_Zebra(void)
 		OutputZebra(hdr, S.msg.table);
 
 	Bgp_ClearMsg(&S.msg);
-
-done:
-	Bgp_ClearMrt(&S.rec);
 }
 
 static void OutputRibv2(const Mrthdr       *hdr,
@@ -172,7 +165,7 @@ void BgpgrepD_TableDumpv2(void)
 		return;
 	}
 	if (!TABLE_DUMPV2_ISRIB(hdr->subtype))
-		goto done;  // don't care for anything but RIBs
+		return;  // don't care for anything but RIBs
 
 	// We may only dump record if we've got a PEER_INDEX_TABLE
 	if (!S.hasPeerIndex)
@@ -221,9 +214,6 @@ void BgpgrepD_TableDumpv2(void)
 
 		Bgp_ClearMsg(&S.msg);
 	}
-
-done:
-	Bgp_ClearMrt(&S.rec);
 }
 
 static void OutputRib(const Mrthdr *hdr, const Mrtribent *ent, Bgpattrtab tab)
@@ -242,7 +232,7 @@ void BgpgrepD_TableDump(void)
 		// FAST PATH - No need to rebuild BGP
 		BGP_CLRATTRTAB(S.msg.table);
 		OutputRib(hdr, ent, S.msg.table);
-		goto done;
+		return;
 	}
 
 	// FILTERING PATH - Setup VM for TABLE_DUMP
@@ -269,7 +259,4 @@ void BgpgrepD_TableDump(void)
 	}
 
 	Bgp_ClearMsg(&S.msg);
-
-done:
-	Bgp_ClearMrt(&S.rec);
 }

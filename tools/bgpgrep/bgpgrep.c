@@ -360,6 +360,8 @@ static void Bgpgrep_ProcessMrtDump(const char *filename)
 
 			break;
 		}
+
+		Bgp_ClearMrt(&S.rec);
 	}
 
 	// Don't need PEER_INDEX_TABLE anymore
