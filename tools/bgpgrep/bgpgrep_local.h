@@ -107,6 +107,10 @@ struct BgpgrepState {
 	const char       *filename;  // current file being processed
 	const BgpDumpfmt *outFmt;
 
+	// MRT input file stream
+	void *inf;             // NOTE: may be NULL even in a file is open
+	const StmOps *infOps;  // if NULL no file is open
+
 	// Miscellaneous global flags and data
 	Boolean8  noColor;
 	Boolean8  hasPeerIndex;

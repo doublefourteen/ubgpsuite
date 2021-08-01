@@ -204,6 +204,15 @@ void Bgpgrep_DropFile(const char *fmt, ...)
 	Bgp_ClearMrt(&S.peerIndex);
 	S.hasPeerIndex = FALSE;
 
+	// Finally close current file and jump
+	if (S.infOps) {
+		if (S.infOps->Close) S.infOps->Close(S.inf);
+
+		S.inf    = NULL;
+		S.infOps = NULL;
+	}
+
+	S.filename = NULL;
 	longjmp_fast(S.dropFileFrame);
 }
 
@@ -283,36 +292,40 @@ static void Bgpgrep_Init(void)
 	Bgp_InitVm(&S.vm, /*heapSize=*/0);
 }
 
-static const StmOps *Bgpgrep_OpenMrtDump(const char *filename, void **phn)
+static void Bgpgrep_OpenMrtDump(const char *filename)
 {
-	Fildes fh = Sys_Fopen(filename, FM_READ, FH_SEQ);
+	S.filename = filename;
+	if (strcmp(S.filename, "-") == 0) {
+		// Direct read from stdin - assume uncompressed.
+		S.inf    = STM_FILDES(CON_FILDES(STDIN));
+		S.infOps = Stm_NcFildesOps;
+		return;
+	}
+
+	Fildes fh = Sys_Fopen(S.filename, FM_READ, FH_SEQ);
 	if (fh == FILDES_BAD)
 		Bgpgrep_DropFile("Can't open file");
 
-	const char *ext = Sys_GetFileExtension(filename);
-
-	void *hn;
-	const StmOps *ops;
-
+	const char *ext = Sys_GetFileExtension(S.filename);
 	if (Df_stricmp(ext, ".bz2") == 0) {
-		hn  = Bzip2_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
-		ops = Bzip2_StmOps;
+		S.inf    = Bzip2_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
+		S.infOps = Bzip2_StmOps;
 
 		Bzip2Ret err = Bzip2_GetErrStat();
 		if (err)
 			Bgpgrep_DropFile("Can't read Bz2 archive: %s", Bzip2_ErrorString(err));
 
 	} else if (Df_stricmp(ext, ".gz") == 0 || Df_stricmp(ext, ".z") == 0) {
-		hn  = Zlib_InflateOpen(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
-		ops = Zlib_StmOps;
+		S.inf    = Zlib_InflateOpen(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
+		S.infOps = Zlib_StmOps;
 
 		ZlibRet err = Zlib_GetErrStat();
 		if (err)
 			Bgpgrep_DropFile("Can't read Zlib archive: %s", Zlib_ErrorString(err));
 
 	} else if (Df_stricmp(ext, ".xz") == 0) {
-		hn  = Xz_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
-		ops = Xz_StmOps;
+		S.inf    = Xz_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
+		S.infOps = Xz_StmOps;
 
 		XzRet err = Xz_GetErrStat();
 		if (err)
@@ -320,30 +333,21 @@ static const StmOps *Bgpgrep_OpenMrtDump(const char *filename, void **phn)
 
 	} else {
 		// Assume uncompressed file
-		hn  = STM_FILDES(fh);
-		ops = Stm_FildesOps;
+		S.inf    = STM_FILDES(fh);
+		S.infOps = Stm_FildesOps;
 	}
-
-	*phn = hn;
-	return ops;
 }
 
 static void Bgpgrep_ProcessMrtDump(const char *filename)
 {
-	void *hn;
-	const StmOps *ops;
-
-	S.filename = filename;  // NOTE: Only function that manipulates this
-
-	if (strcmp(filename, "-") == 0) {
-		hn  = STM_FILDES(CON_FILDES(STDIN));
-		ops = Stm_NcFildesOps;
-	} else
-		ops = Bgpgrep_OpenMrtDump(filename, &hn);
+	// NOTE: This call is responsible to set and clear:
+	// S.filename, S.inf, S.infOps.
+	// These must be cleared either here or within a file drop.
+	Bgpgrep_OpenMrtDump(filename);
 
 	setjmp_fast(S.dropRecordFrame);  // NOTE: The ONLY place where this is set
 	setjmp_fast(S.dropMsgFrame);     // NOTE: May be set again by specific BgpgrepD_*()
-	while (Bgp_ReadMrt(&S.rec, hn, ops) == OK) {
+	while (Bgp_ReadMrt(&S.rec, S.inf, S.infOps) == OK) {
 		const Mrthdr *hdr = MRT_HDR(&S.rec);
 
 		switch (hdr->type) {
@@ -358,16 +362,20 @@ static void Bgpgrep_ProcessMrtDump(const char *filename)
 		}
 	}
 
-	if (ops->Close)
-		ops->Close(hn);
+	// Don't need PEER_INDEX_TABLE anymore
+	Bgp_ClearMrt(&S.peerIndex);
+	S.hasPeerIndex = FALSE;
 
+	// Close input
+	if (S.infOps->Close) S.infOps->Close(S.inf);
+
+	S.inf      = NULL;
+	S.infOps   = NULL;
 	S.filename = NULL;
 }
 
 static int Bgpgrep_CleanupAndExit(void)
 {
-	assert(!S.hasPeerIndex);  // should have been cleared
-
 	Bgp_ClearVm(&S.vm);
 
 	Trielist *t = S.trieList;
@@ -429,13 +437,8 @@ int main(int argc, char **argv)
 	volatile int i = 0;
 
 	setjmp_fast(S.dropFileFrame);  // NOTE: The ONLY place where this is set
-	while (i < nfiles) {
+	while (i < nfiles)
 		Bgpgrep_ProcessMrtDump(files[i++]);
-
-		// Don't need PEER_INDEX_TABLE anymore
-		Bgp_ClearMrt(&S.peerIndex);
-		S.hasPeerIndex = FALSE;
-	}
 
 	return Bgpgrep_CleanupAndExit();
 }
