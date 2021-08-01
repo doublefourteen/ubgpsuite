@@ -133,6 +133,15 @@ void Peerindex_DropFile(const char *fmt, ...)
 	Bgp_ClearMrt(&S.peerIndex);
 	S.hasPeerIndex = FALSE;
 
+	// Drop any opened file and jump out
+	if (S.infOps) {
+		if (S.infOps->Close) S.infOps->Close(S.inf);
+
+		S.inf    = NULL;
+		S.infOps = NULL;
+	}
+	S.filename = NULL;
+
 	longjmp(S.dropFileFrame, 1);
 }
 
@@ -179,36 +188,40 @@ static void Peerindex_Init(void)
 	S.rec.memOps = Mem_BgpBufOps;
 }
 
-static const StmOps *Peerindex_OpenMrtDump(const char *filename, void **phn)
+static void Peerindex_OpenMrtDump(const char *filename)
 {
+	S.filename = filename;
+	if (strcmp(S.filename, "-") == 0) {
+		// Direct read from stdin, assume uncompressed
+		S.inf    = STM_FILDES(CON_FILDES(STDIN));
+		S.infOps = Stm_NcFildesOps;
+		return;
+	}
+
 	Fildes fh = Sys_Fopen(filename, FM_READ, FH_SEQ);
 	if (fh == FILDES_BAD)
 		Peerindex_DropFile("Can't open file");
 
 	const char *ext = Sys_GetFileExtension(filename);
-
-	void *hn;
-	const StmOps *ops;
-
 	if (Df_stricmp(ext, ".bz2") == 0) {
-		hn  = Bzip2_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
-		ops = Bzip2_StmOps;
+		S.inf    = Bzip2_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
+		S.infOps = Bzip2_StmOps;
 
 		Bzip2Ret err = Bzip2_GetErrStat();
 		if (err)
 			Peerindex_DropFile("Can't read Bz2 archive: %s", Bzip2_ErrorString(err));
 
 	} else if (Df_stricmp(ext, ".gz") == 0 || Df_stricmp(ext, ".z") == 0) {
-		hn  = Zlib_InflateOpen(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
-		ops = Zlib_StmOps;
+		S.inf    = Zlib_InflateOpen(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
+		S.infOps = Zlib_StmOps;
 
 		ZlibRet err = Zlib_GetErrStat();
 		if (err)
 			Peerindex_DropFile("Can't read Zlib archive: %s", Zlib_ErrorString(err));
 
 	} else if (Df_stricmp(ext, ".xz") == 0) {
-		hn  = Xz_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
-		ops = Xz_StmOps;
+		S.inf    = Xz_OpenDecompress(STM_FILDES(fh), Stm_FildesOps, /*opts=*/NULL);
+		S.infOps = Xz_StmOps;
 
 		XzRet err = Xz_GetErrStat();
 		if (err)
@@ -216,12 +229,9 @@ static const StmOps *Peerindex_OpenMrtDump(const char *filename, void **phn)
 
 	} else {
 		// Assume uncompressed file
-		hn  = STM_FILDES(fh);
-		ops = Stm_FildesOps;
+		S.inf    = STM_FILDES(fh);
+		S.infOps = Stm_FildesOps;
 	}
-
-	*phn = hn;
-	return ops;
 }
 
 static void Peerindex_MarkPeerRefs(void)
@@ -242,7 +252,7 @@ static void Peerindex_MarkPeerRefs(void)
 	}
 }
 
-static void Peerindex_DumpPeerIndexTable(void)
+static void Peerindex_FlushPeerIndexTable(void)
 {
 	char buf[IPV6_STRLEN + 1];
 	Stmbuf sb;
@@ -278,58 +288,64 @@ static void Peerindex_DumpPeerIndexTable(void)
 	Bufio_Flush(&sb);
 }
 
-static void Peerindex_ProcessMrtDump(const char *filename)
+static void Peerindex_ProcessRecord(void)
 {
-	void *hn;
-	const StmOps *ops;
+	const Mrthdr *hdr = MRT_HDR(&S.rec);
+	if (hdr->type != MRT_TABLE_DUMPV2)
+		return;  // don't care for anything else
 
-	S.filename = filename;  // NOTE: Only function that manipulates this
+	if (hdr->subtype == TABLE_DUMPV2_PEER_INDEX_TABLE) {
+		// Dump peers seen so far, if any
+		Peerindex_FlushPeerIndexTable();
+		// Clear previous PEER_INDEX_TABLE, if any
+		Bgp_ClearMrt(&S.peerIndex);
+		// Clear reference table...
+		memset(S.peerIndexRefs, S.peerIndexClearVal, sizeof(S.peerIndexRefs));
 
-	if (strcmp(filename, "-") == 0) {
-		hn  = STM_FILDES(CON_FILDES(STDIN));
-		ops = Stm_NcFildesOps;
-	} else
-		ops = Peerindex_OpenMrtDump(filename, &hn);
+		//...and update current PEER_INDEX_TABLE
+		size_t npeers;
 
-	setjmp(S.dropRecordFrame);  // NOTE: The ONLY place where this is set
-	while (Bgp_ReadMrt(&S.rec, hn, ops) == OK) {
-		const Mrthdr *hdr = MRT_HDR(&S.rec);
-		if (hdr->type != MRT_TABLE_DUMPV2)
-			continue;  // don't care for anything else
-
-		if (hdr->subtype == TABLE_DUMPV2_PEER_INDEX_TABLE) {
-			// Dump peers seen so far, if any
-			Peerindex_DumpPeerIndexTable();
-			// Clear previous PEER_INDEX_TABLE, if any
-			Bgp_ClearMrt(&S.peerIndex);
-			// Clear reference table...
-			memset(S.peerIndexRefs, S.peerIndexClearVal, sizeof(S.peerIndexRefs));
-
-			//...and update current PEER_INDEX_TABLE
-			size_t npeers;
-
-			MRT_MOVEREC(&S.peerIndex, &S.rec);
-			Bgp_GetMrtPeerIndexPeers(&S.peerIndex, &npeers, /*nbytes=*/NULL);
-			S.npeers       = npeers;
-			S.hasPeerIndex = TRUE;
-			continue;
-		}
-		if (!TABLE_DUMPV2_ISRIB(hdr->subtype))
-			continue;  // don't care for anything but RIBs
-
-		if (!S.hasPeerIndex) {
-			Peerindex_Warning("SKIPPING");
-			continue;
-		}
-
-		Peerindex_MarkPeerRefs();
+		MRT_MOVEREC(&S.peerIndex, &S.rec);
+		Bgp_GetMrtPeerIndexPeers(&S.peerIndex, &npeers, /*nbytes=*/NULL);
+		S.npeers       = npeers;
+		S.hasPeerIndex = TRUE;
+		return;
 	}
 
-	Peerindex_DumpPeerIndexTable();  // execute the very last dump
+	if (!TABLE_DUMPV2_ISRIB(hdr->subtype))
+		return;  // irrelevant to us
 
-	if (ops->Close)
-		ops->Close(hn);
+	if (!S.hasPeerIndex)
+		Peerindex_DropRecord("SKIPPING TABLE_DUMPV2 RECORD - No PEER_INDEX_TABLE found yet");
 
+	Peerindex_MarkPeerRefs();
+}
+
+static void Peerindex_ProcessMrtDump(const char *filename)
+{
+	// NOTE: This call is responsible to set and clear:
+	// S.filename, S.inf, S.infOps.
+	// These must be cleared either here or within a file drop.
+	Peerindex_OpenMrtDump(filename);
+
+	setjmp(S.dropRecordFrame);  // NOTE: The ONLY place where this is set
+	while (Bgp_ReadMrt(&S.rec, S.inf, S.infOps) == OK) {
+		Peerindex_ProcessRecord();
+
+		Bgp_ClearMrt(&S.rec);
+	}
+
+	Peerindex_FlushPeerIndexTable();  // execute the very last dump
+
+	// Don't need PEER_INDEX_TABLE anymore
+	Bgp_ClearMrt(&S.peerIndex);
+	S.hasPeerIndex = FALSE;
+
+	// Finally close file and call it a day
+	if (S.infOps->Close) S.infOps->Close(S.inf);
+
+	S.inf      = NULL;
+	S.infOps   = NULL;
 	S.filename = NULL;
 }
 
@@ -370,13 +386,8 @@ int main(int argc, char **argv)
 	volatile int i = 0;
 
 	setjmp(S.dropFileFrame);  // NOTE: The ONLY place where this is set
-	while (i < argc) {
+	while (i < argc)
 		Peerindex_ProcessMrtDump(argv[i++]);
-
-		// Don't need PEER_INDEX_TABLE anymore
-		Bgp_ClearMrt(&S.peerIndex);
-		S.hasPeerIndex = FALSE;
-	}
 
 	return (S.nerrors > 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
