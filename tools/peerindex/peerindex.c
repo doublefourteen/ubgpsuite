@@ -323,7 +323,7 @@ static void Peerindex_ProcessRecord(void)
 
 static void Peerindex_ProcessMrtDump(const char *filename)
 {
-	// NOTE: This call is responsible to set and clear:
+	// NOTE: This call is responsible to set:
 	// S.filename, S.inf, S.infOps.
 	// These must be cleared either here or within a file drop.
 	Peerindex_OpenMrtDump(filename);

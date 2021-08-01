@@ -340,7 +340,7 @@ static void Bgpgrep_OpenMrtDump(const char *filename)
 
 static void Bgpgrep_ProcessMrtDump(const char *filename)
 {
-	// NOTE: This call is responsible to set and clear:
+	// NOTE: This call is responsible to set:
 	// S.filename, S.inf, S.infOps.
 	// These must be cleared either here or within a file drop.
 	Bgpgrep_OpenMrtDump(filename);
