@@ -68,7 +68,7 @@ static void FixBgpAttributeTableForRib(Bgpattrtab tab, Boolean isRibv2)
 static void OutputBgp4mp(const Mrthdr *hdr, Bgpattrtab tab)
 {
 	S.lenientBgpErrors = TRUE;
-	S.outFmt->DumpBgp4mp(hdr, STM_CONHN(STDOUT), Stm_ConOps, tab);
+	S.outFmt->DumpBgp4mp(hdr, S.outf, S.outfOps, tab);
 	S.lenientBgpErrors = FALSE;
 }
 
@@ -104,7 +104,7 @@ void BgpgrepD_Bgp4mp(void)
 static void OutputZebra(const Mrthdr *hdr, Bgpattrtab tab)
 {
 	S.lenientBgpErrors = TRUE;
-	S.outFmt->DumpZebra(hdr, STM_CONHN(STDOUT), Stm_ConOps, tab);
+	S.outFmt->DumpZebra(hdr, S.outf, S.outfOps, tab);
 	S.lenientBgpErrors = FALSE;
 }
 
@@ -149,7 +149,7 @@ static void OutputRibv2(const Mrthdr       *hdr,
                         Bgpattrtab          tab)
 {
 	S.lenientBgpErrors = TRUE;
-	S.outFmt->DumpRibv2(hdr, peerent, ent, STM_CONHN(STDOUT), Stm_ConOps, tab);
+	S.outFmt->DumpRibv2(hdr, peerent, ent, S.outf, S.outfOps, tab);
 	S.lenientBgpErrors = FALSE;
 }
 
@@ -219,7 +219,7 @@ void BgpgrepD_TableDumpv2(void)
 static void OutputRib(const Mrthdr *hdr, const Mrtribent *ent, Bgpattrtab tab)
 {
 	S.lenientBgpErrors = TRUE;
-	S.outFmt->DumpRib(hdr, ent, STM_CONHN(STDOUT), Stm_ConOps, tab);
+	S.outFmt->DumpRib(hdr, ent, S.outf, S.outfOps, tab);
 	S.lenientBgpErrors = FALSE;
 }
 

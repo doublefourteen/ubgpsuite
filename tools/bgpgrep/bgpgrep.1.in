@@ -17,7 +17,9 @@ utility reads each possibly compressed Multithreaded Routing Toolkit
 (MRT)
 dump file specified by
 .IR FILES
-and formats its contents to standard output.
+and formats its contents to standard output (or any custom output file
+as specified by
+.IR OPTIONS ).
 .IR @UTILITY@
 may optionally evaluate a predicate defined by
 .IR EXPRESSION
@@ -37,8 +39,8 @@ regardless of any filtering rule.
 prints diagnostics to standard error,
 it detects and tolerates data corruption as much as possible.
 Corruption within a BGP message causes only the affected message to be
-dropped. Unrecoverable corruption within the entire MRT dump file causes
-the whole file to be dropped,
+dropped. Though unrecoverable errors affecting the entire MRT dump file may
+require it to be dropped as a whole,
 .IR @UTILITY@
 will then move to the next file in
 .IR FILES ,
@@ -46,7 +48,7 @@ if any.
 .P
 Such events are always reported with reasonable diagnostic errors.
 Parsed data up to the corruption point may still be printed to
-standard output.
+regular output.
 
 .SH OPTIONS
 .IR @UTILITY@
@@ -73,6 +75,15 @@ MRT dump files processing.
 may ease visualization by surrounding some output with color escape sequences,
 on terminals that support this feature. This option forces colored text
 output off.
+
+.IP "\fB\-o \fI<file>\fP" 10
+Write output to
+.BR file .
+Instead of using standard output,
+.IR @UTILITY@
+shall format MRT contents to the specified file. If option occurs
+multiple times, last specified file is used. This option forces colored
+text output off.
 
 .IP "\fB\-h or \-\-help\fP" 10
 Prints a short help message, summarizing
@@ -582,8 +593,11 @@ supported compression formats. If the file extension is not recognized,
 or there is no extension, then it is assumed to be uncompressed.
 
 .SH STDOUT
-The standard output is used to print a human readable text representation of
-BGP message data, nothing else shall be written to the standard output.
+Unless redirected explicitly via
+.IR OPTIONS ,
+the standard output is used to print a human readable text
+representation of BGP message data, nothing else shall be written
+to the standard output.
 .IR @UTILITY@
 may detect and treat as error whenever the standard output is a regular file,
 and is the same file as any of the
@@ -597,7 +611,9 @@ section.
 
 .SH STDERR
 The standard error is used only for diagnostic messages and error reporting.
-Any BGP message output is exclusive to standard output.
+Any BGP message output is exclusive to standard output or any file explicitly
+specified by
+.IR OPTIONS .
 
 .SH EXAMPLES
 This section contains some useful examples, starting from trivial ones,

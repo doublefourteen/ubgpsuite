@@ -38,6 +38,7 @@ BgpgrepState S;
 typedef enum {
 	NO_COLOR_FLAG,
 	DUMP_BYTECODE_FLAG,
+	OUTPUT_FLAG,
 
 	NUM_FLAGS
 } BgpgrepOpt;
@@ -48,6 +49,9 @@ static Optflag options[] = {
 	},
 	[DUMP_BYTECODE_FLAG] = {
 		'-', "dump-bytecode", NULL, "Dump BGP VM bytecode to stderr (debug)", ARG_NONE
+	},
+	[OUTPUT_FLAG] = {
+		'o', NULL, "file", "Write output to file", ARG_REQ
 	},
 
 	[NUM_FLAGS] = { '\0' }
@@ -63,32 +67,12 @@ static void Bgpgrep_SetupCommandLine(char *argv0)
 	com_shortDescr = "Filter and print BGP data within MRT dumps";
 	com_longDescr  =
 		"Reads MRT dumps in various formats, applying filtering rules\n"
-		"to each BGP message therein, then outputs every passing message to stdout.\n"
+		"to each BGP message therein, then outputs every passing message\n"
+		"to stdout (or any custom output file defined by OPTIONS).\n"
 		"If - is found inside FILES, then input is read from stdin.\n"
 		"If no FILES arguments are provided, then input\n"
 		"is implicitly expected from stdin.\n"
 		"Any diagnostic message is logged to stderr.";
-}
-
-static void Bgpgrep_ApplyProgramOptions(void)
-{
-	S.noColor      = options[NO_COLOR_FLAG].flagged;
-	S.dumpBytecode = options[DUMP_BYTECODE_FLAG].flagged;
-}
-
-static int CountFileArguments(int argc, char **argv)
-{
-	int i;
-
-	for (i = 0; i < argc; i++) {
-		const char *arg = argv[i];
-		if (arg[0] == '-' && arg[1] != '\0')
-			break;
-		if (strcmp(arg, "(") == 0 || strcmp(arg, "!") == 0)
-			break;
-	}
-
-	return i;
 }
 
 void Bgpgrep_Fatal(const char *fmt, ...)
@@ -124,6 +108,46 @@ void Bgpgrep_Warning(const char *fmt, ...)
 	va_end(va);
 
 	Sys_Print(STDERR, "\n");
+}
+
+static void Bgpgrep_ApplyProgramOptions(void)
+{
+	S.noColor      = options[NO_COLOR_FLAG].flagged;
+	S.dumpBytecode = options[DUMP_BYTECODE_FLAG].flagged;
+	if (options[OUTPUT_FLAG].flagged) {
+		const char *filename = options[OUTPUT_FLAG].optarg;
+
+		Fildes fd = Sys_Fopen(filename, FM_WRITE, /*hints=*/0);
+		if (fd == FILDES_BAD)
+			Bgpgrep_Fatal("Can't open output file \"%s\"", filename);
+
+		S.outf    = STM_FILDES(fd);
+		S.outfOps = Stm_FildesOps;
+
+		S.noColor = TRUE;
+	} else {
+		S.outf    = STM_CONHN(STDOUT);
+		S.outfOps = Stm_ConOps;
+	}
+	if (!S.noColor && Sys_IsVt100Console(STDOUT))
+		S.outFmt = Bgp_IsolarioFmtWc;  // console supports colors
+	else
+		S.outFmt = Bgp_IsolarioFmt;
+}
+
+static int CountFileArguments(int argc, char **argv)
+{
+	int i;
+
+	for (i = 0; i < argc; i++) {
+		const char *arg = argv[i];
+		if (arg[0] == '-' && arg[1] != '\0')
+			break;
+		if (strcmp(arg, "(") == 0 || strcmp(arg, "!") == 0)
+			break;
+	}
+
+	return i;
 }
 
 void Bgpgrep_DropMessage(const char *fmt, ...)
@@ -278,11 +302,6 @@ NOINLINE static void Bgpgrep_HandleBgpError(BgpRet err, Srcloc *loc, void *obj)
 
 static void Bgpgrep_Init(void)
 {
-	if (!S.noColor && Sys_IsVt100Console(STDOUT))
-		S.outFmt = Bgp_IsolarioFmtWc;  // console supports colors
-	else
-		S.outFmt = Bgp_IsolarioFmt;
-
 	Mrtrecord *rec = &S.rec;
 	Bgpmsg    *msg = &S.msg;
 
@@ -389,6 +408,9 @@ static int Bgpgrep_CleanupAndExit(void)
 
 		t = tn;
 	}
+
+	if (S.outfOps->Close) S.outfOps->Close(S.outf);
+
 	return (S.nerrors > 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 

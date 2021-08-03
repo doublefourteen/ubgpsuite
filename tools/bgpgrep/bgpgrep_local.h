@@ -104,12 +104,15 @@ typedef jmp_buf frame_buf;
 
 typedef struct BgpgrepState BgpgrepState;
 struct BgpgrepState {
-	const char       *filename;  // current file being processed
+	// Output
 	const BgpDumpfmt *outFmt;
+	void             *outf;
+	const StmOps     *outfOps;
 
 	// MRT input file stream
-	void *inf;             // NOTE: may be NULL even in a file is open
-	const StmOps *infOps;  // if NULL no file is open
+	const char   *filename;  // current file being processed
+	void         *inf;       // NOTE: may be NULL even in a file is open
+	const StmOps *infOps;    // if NULL no file is open
 
 	// Miscellaneous global flags and data
 	Boolean8  noColor;
