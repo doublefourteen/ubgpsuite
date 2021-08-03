@@ -31,6 +31,10 @@ FORCE_INLINE Boolean ISPEERINDEXREF(const PeerRefsTab tab, Uint16 idx)
 }
 
 typedef struct {
+	// Output stream
+	void         *outf;
+	const StmOps *outfOps;
+
 	// MRT input file stream
 	const char   *filename;
 	void         *inf;

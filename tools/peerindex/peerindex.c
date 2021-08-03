@@ -32,6 +32,7 @@
 
 typedef enum {
 	ONLY_REFS_FLAG,
+	OUTPUT_FLAG,
 
 	NUM_FLAGS
 } PeerindexOpt;
@@ -39,6 +40,9 @@ typedef enum {
 static Optflag options[] = {
 	[ONLY_REFS_FLAG] = {
 		'r', "only-refs", NULL, "Only dump peers referenced by RIBs", ARG_NONE
+	},
+	[OUTPUT_FLAG] = {
+		'o', NULL, "file", "Write output to file", ARG_REQ
 	},
 
 	[NUM_FLAGS] = { '\0' }
@@ -62,6 +66,21 @@ static void Peerindex_SetupCommandLine(char *argv0)
 		"If no FILES arguments are provided, then input\n"
 		"is implicitly expected from stdin.\n"
 		"Any diagnostic message is logged to stderr.";
+}
+
+static void Peerindex_Fatal(const char *fmt, ...)
+{
+	va_list va;
+
+	Sys_Print(STDERR, com_progName);
+	Sys_Print(STDERR, ": ERROR: ");
+
+	va_start(va, fmt);
+	Sys_VPrintf(STDERR, fmt, va);
+	va_end(va);
+
+	Sys_Print(STDERR, "\n");
+	exit(EXIT_FAILURE);
 }
 
 static void Peerindex_Warning(const char *fmt, ...)
@@ -180,6 +199,20 @@ static void Peerindex_ApplyProgramOptions(void)
 		S.peerIndexClearVal = 0;
 	else
 		S.peerIndexClearVal = 0xff;  // so we always print the full table
+
+	if (options[OUTPUT_FLAG].flagged) {
+		const char *filename = options[OUTPUT_FLAG].optarg;
+
+		Fildes fd = Sys_Fopen(filename, FM_WRITE, /*hints=*/0);
+		if (fd == FILDES_BAD)
+			Peerindex_Fatal("Can't open output file \"%s\"", filename);
+
+		S.outf    = STM_FILDES(fd);
+		S.outfOps = Stm_FildesOps;
+	} else {
+		S.outf    = STM_CONHN(STDOUT);
+		S.outfOps = Stm_ConOps;
+	}
 }
 
 static void Peerindex_Init(void)
@@ -267,7 +300,7 @@ static void Peerindex_FlushPeerIndexTable(void)
 
 	Uint16 idx = 0;
 
-	Bufio_Init(&sb, STM_CONHN(STDOUT), Stm_ConOps);
+	Bufio_Init(&sb, S.outf, S.outfOps);
 
 	Bgp_StartMrtPeersv2(&it, &S.peerIndex);
 	while ((peer = Bgp_NextMrtPeerv2(&it)) != NULL) {
@@ -388,6 +421,8 @@ int main(int argc, char **argv)
 	setjmp(S.dropFileFrame);  // NOTE: The ONLY place where this is set
 	while (i < argc)
 		Peerindex_ProcessMrtDump(argv[i++]);
+
+	if (S.outfOps->Close) S.outfOps->Close(S.outf);
 
 	return (S.nerrors > 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
