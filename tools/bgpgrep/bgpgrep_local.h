@@ -177,6 +177,7 @@ Sint32 BgpgrepC_ParseCommunity(BgpVmOpt);
 void BgpgrepF_FindAsLoops(Bgpvm *);
 void BgpgrepF_PeerAddrMatch(Bgpvm *);
 void BgpgrepF_TimestampCompare(Bgpvm *);
+void BgpgrepF_BogonAsn(Bgpvm *);
 
 // ==================
 // MRT Dump functions

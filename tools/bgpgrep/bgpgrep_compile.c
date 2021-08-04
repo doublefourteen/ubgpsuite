@@ -62,6 +62,7 @@ typedef struct {
 	Sint32 loopsFn;
 	Sint32 peerMatchFn;
 	Sint32 timestampCmpFn;
+	Sint32 bogonAsnFn;
 
 	Uint16   ncode;
 	Boolean8 wasImplicitAnd;
@@ -330,6 +331,10 @@ static Expridx GetTerm(void)
 
 	} else if (strcmp(C.curterm, "-loops") == 0) {
 		c[n++] = BGP_VMOP(BGP_VMOP_CALL, C.loopsFn);
+		return PushLeaf(c, n);
+
+	} else if (strcmp(C.curterm, "-bogon-asn") == 0) {
+		c[n++] = BGP_VMOP(BGP_VMOP_CALL, C.bogonAsnFn);
 		return PushLeaf(c, n);
 
 	} else if (strcmp(C.curterm, "-exact") == 0) {
@@ -710,9 +715,14 @@ void Bgpgrep_CompileVmProgram(int argc, char **argv)
 	C.timestampCmpFn = BGP_VMSETFN(&S.vm,
 	                               Bgp_VmNewFn(&S.vm),
 	                               BgpgrepF_TimestampCompare);
+	C.bogonAsnFn = BGP_VMSETFN(&S.vm,
+	                           Bgp_VmNewFn(&S.vm),
+	                           BgpgrepF_BogonAsn);
+
 	assert(C.loopsFn >= 0);
 	assert(C.peerMatchFn >= 0);
 	assert(C.timestampCmpFn >= 0);
+	assert(C.bogonFn >= 0);
 
 	// Actual compilation
 	if (C.argc > 0) {

@@ -155,6 +155,39 @@ section below.
 .IP "\fB\-loops\fR" 10
 Evaluates as true if BGP message is an UPDATE whose AS_PATH contains loops.
 
+.IP "\fB\-bogon\-asn\fR" 10
+Evaluates as true if BGP message is an UPDATE whose AS_PATH contains bogon ASN.
+Any of the following is classified as a bogon ASN:
+.RS
+.IP "\fI0\fR" 25
+Reserved by
+.IR "RFC 7607" .
+.IP "\fI23456\fR" 25
+.IR AS_TRANS ,
+see
+.IR "RFC 6793" .
+.IP "\fI64496\-64511\fR" 25
+Reserved for use in docs and code by
+.IR "RFC 5398" .
+.IP "\fI64512\-65534\fR" 25
+Reserved for private use by
+.IR "RFC 6996" .
+.IP "\fI65535\fR" 25
+Reserved by
+.IR "RFC 7300" .
+.IP "\fI65536\-65551\fR" 25
+Reserved for use in docs and code by
+.IR "RFC 5398" .
+.IP "\fI65552\-131071\fR" 25
+Reserved by IANA.
+.IP "\fI4200000000\-4294967294\fR" 25
+Reserved for private use by
+.IR "RFC 6996" .
+.IP "\fI4294967295\fR" 25
+Reserved by
+.IR "RFC 7300" .
+.RE
+
 .IP "\fB\-exact\ \fIprefix\-expression\fR" 10
 Evaluates as true if BGP message is an UPDATE and contains at least one of the
 relevant networks of interest specified in

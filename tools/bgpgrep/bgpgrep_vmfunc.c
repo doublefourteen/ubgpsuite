@@ -12,6 +12,7 @@
 #include "bgpgrep_local.h"
 
 #include "bgp/vmintrin.h"
+#include "sys/endian.h"
 
 #include <assert.h>
 #include <string.h>
@@ -156,8 +157,8 @@ void BgpgrepF_TimestampCompare(Bgpvm *vm)
 	}
 
 nomatch:
-
 	// XXX: include match info
+
 	BGP_VMPUSH(vm, res);
 }
 
@@ -169,6 +170,7 @@ void BgpgrepF_FindAsLoops(Bgpvm *vm)
 	 * PUSHES:
 	 * TRUE if loops are found inside AS PATH, FALSE otherwise
 	 */
+
 	Aspathiter it;
 
 	Asntree t;
@@ -188,7 +190,7 @@ void BgpgrepF_FindAsLoops(Bgpvm *vm)
 	while ((asn = Bgp_NextAsPath(&it)) != -1) {
 		Asn32 as32 = ASN(asn);
 		if (as32 == AS4_TRANS) {
-			// AS_TRANS are irrelevant for loops
+			// AS_TRANS are irrelevant for loops (they are, in fact, bogons)
 			pos++;
 			continue;
 		}
@@ -212,8 +214,60 @@ void BgpgrepF_FindAsLoops(Bgpvm *vm)
 	Bgp_VmTempFree(vm, t.n * ALIGNEDNODESIZ);
 
 nomatch:
-
 	// XXX: include match info
 	if (BGP_VMCHKSTK(vm, 1))
 		BGP_VMPUSH(vm, foundLoop);
+}
+
+void BgpgrepF_BogonAsn(Bgpvm *vm)
+{
+	/* POPS:
+	 * NONE
+	 *
+	 * PUSHES:
+	 * TRUE if bogons are found inside AS PATH, FALSE otherwise
+	 */
+
+	Aspathiter it;
+	Asn asn;
+
+	Boolean foundBogon = FALSE;
+
+	const Bgphdr *hdr = BGP_HDR(vm->msg);
+	if (hdr->type != BGP_UPDATE)
+		goto nomatch;
+
+	if (Bgp_StartMsgRealAsPath(&it, vm->msg) != OK)
+		goto nomatch;
+
+	while ((asn = Bgp_NextAsPath(&it)) != -1) {
+		Asn32 n = beswap32(ASN(asn));
+
+		// https://ripe72.ripe.net/wp-content/uploads/presentations/151-RIPE72_bogon_ASNs_JobSnijders.pdf
+		// https://www.manrs.org/2021/01/routing-security-terms-bogons-vogons-and-martians/
+		// Breakdown:
+		// 0                      Reserved can't use in BGP RFC 7607
+		// 23456                  AS_TRANS RFC 6793
+		// 64496-64511            Reserved for use in docs and code RFC 5398
+		// 64512-65534            Reserved for Private Use RFC 6996
+		// 65535                  Reserved RFC 7300
+		// 65536-65551            Reserved for use in docs and code RFC 5398
+		// 65552-131071           Reserved by IANA
+		// 4200000000-4294967294  Reserved for Private Use RFC 6996
+		// 4294967295             Reserved RFC 7300
+		foundBogon |= (n == 0u || n == 23456u);
+		foundBogon |= (n >= 64496u && n <= 131071u);
+		foundBogon |= (n >= 4200000000u && n <= 4294967295u);
+		if (foundBogon)
+			break;
+	}
+	if (Bgp_GetErrStat(NULL)) {
+		vm->errCode = BGPEVMMSGERR;
+		return;
+	}
+
+nomatch:
+	// XXX: include match info
+	if (BGP_VMCHKSTK(vm, 1))
+		BGP_VMPUSH(vm, foundBogon);
 }
