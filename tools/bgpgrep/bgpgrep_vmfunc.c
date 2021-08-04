@@ -241,7 +241,7 @@ void BgpgrepF_BogonAsn(Bgpvm *vm)
 		goto nomatch;
 
 	while ((asn = Bgp_NextAsPath(&it)) != -1) {
-		Asn32 n = beswap32(ASN(asn));
+		Uint32 n = beswap32(ASN(asn));
 
 		// https://ripe72.ripe.net/wp-content/uploads/presentations/151-RIPE72_bogon_ASNs_JobSnijders.pdf
 		// https://www.manrs.org/2021/01/routing-security-terms-bogons-vogons-and-martians/
