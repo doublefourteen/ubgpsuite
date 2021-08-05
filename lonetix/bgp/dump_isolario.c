@@ -438,9 +438,9 @@ static void WarnCorrupted(Stmbuf *sb, const Dumpfmtctx *ctx)
 {
 	Bufio_Putc(sb, SEP_CHAR_BAD);
 	if (ctx->withColors)
-		Bufio_Puts(sb, CORRUPT_WARN);
-	else
 		Bufio_Puts(sb, VTSGR(VTINV) CORRUPT_WARN VTSGR(VTNOINV));
+	else
+		Bufio_Puts(sb, CORRUPT_WARN);
 
 	Bufio_Putc(sb, SEP_CHAR_BAD);
 }
