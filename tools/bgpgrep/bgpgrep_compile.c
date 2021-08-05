@@ -722,7 +722,7 @@ void Bgpgrep_CompileVmProgram(int argc, char **argv)
 	assert(C.loopsFn >= 0);
 	assert(C.peerMatchFn >= 0);
 	assert(C.timestampCmpFn >= 0);
-	assert(C.bogonFn >= 0);
+	assert(C.bogonAsnFn >= 0);
 
 	// Actual compilation
 	if (C.argc > 0) {
