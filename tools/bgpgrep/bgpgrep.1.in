@@ -666,8 +666,8 @@ The following is the simplest way to invoke
 .in
 \&
 .fi
-It formats and prints all the BGP data it inside the uncompressed MRT
-input data it receives from standard input.
+It formats and prints all the BGP data found inside the uncompressed MRT
+input data available from standard input.
 
 .IP \[bu]
 The following command:
