@@ -1,0 +1,326 @@
+#!/bin/sh
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Legacy Isolario bgpscanner compatible wrapper for ubgpsuite tools.
+# Emulates most of the classic bgpscanner CLI.
+#
+# Copyright The DoubleFourteen Code Forge (C) All Rights Reserved
+# Author:   Lorenzo Cogotti
+
+NAME=$(basename "$0")
+TGT=bgpgrep
+OPTS=""
+
+PEERAS=""
+PEERASF=""
+PEERADDR=""
+PEERADDRF=""
+ATTRS=""
+COMMS=""
+NCOMMS=""
+EXACT=""
+EXACTF=""
+SUBNETS=""
+SUBNETSF=""
+SUPNETS=""
+SUPNETSF=""
+RELATED=""
+RELATEDF=""
+LOOPS="unspec"
+REXPS=""
+NREXPS=""
+DUMPBYTEC="no"
+OUTREDIR=""
+
+die() {
+    echo "$NAME: $*" >&2
+    exit 1
+}
+
+usage() {
+    echo "$NAME: Legacy bgpscanner-compatible wrapper for ubgpsuite tools" >&2
+    echo "Usage:" >&2
+    echo "  $NAME [-cdlL] [-mM COMMSTRING] [-pP PATHEXPR] [-i ADDR] [-I FILE] [-a AS] [-A FILE] [-e PREFIX] [-E FILE] [-t ATTR_CODE] [-T FILE] [-o FILE] [FILE...]" >&2
+    echo "  $NAME [-cdlL] [-mM COMMSTRING] [-pP PATHEXPR] [-i ADDR] [-I FILE] [-a AS] [-A FILE] [-s PREFIX] [-S FILE] [-t ATTR_CODE] [-T FILE] [-o FILE] [FILE...]" >&2
+    echo "  $NAME [-cdlL] [-mM COMMSTRING] [-pP PATHEXPR] [-i ADDR] [-I FILE] [-a AS] [-A FILE] [-u PREFIX] [-U FILE] [-t ATTR_CODE] [-T FILE] [-o FILE] [FILE...]" >&2
+    echo "  $NAME [-cdlL] [-mM COMMSTRING] [-pP PATHEXPR] [-i ADDR] [-I FILE] [-a AS] [-A FILE] [-r PREFIX] [-R FILE] [-t ATTR_CODE] [-T FILE] [-o FILE] [FILE...]" >&2
+    echo >&2
+    echo "Available options:" >&2
+    echo "  -a <peer AS>" >&2
+    echo "    Print only entries coming from the given peer AS" >&2
+    echo "  -A <file>" >&2
+    echo "    Print only entries coming from any peer AS listed in file" >&2
+#    echo "  -c" >&2
+#    echo "    Dump BGP messages in hexadecimal C array format" >&2
+    echo "  -d" >&2
+    echo "    Dump BGP filter bytecode to stderr (debug option)" >&2
+    echo "  -e <prefix>" >&2
+    echo "    Print only entries containing the exact prefix of interest" >&2
+    echo "  -E <file>" >&2
+    echo "    Print only entries containing exactly any prefix of interest listed in file" >&2
+    echo "  -f" >&2
+    echo "    Print every peer IP address in the RIB provided" >&2
+    echo "  -i <peer IP>"
+    echo "    Print only entries coming from a given peer IP address" >&2
+    echo "  -I <file>" >&2
+    echo "    Print only entries coming from any peer IP address listed in file" >&2
+    echo "  -l" >&2
+    echo "    Print only entries with loops in their AS PATH" >&2
+    echo "  -L" >&2
+    echo "    Print only entries without loops in their AS PATH" >&2
+    echo "  -o <file>" >&2
+    echo "    Redirect output to file (defaults to stdout)" >&2
+    echo "  -m <communities string>" >&2
+    echo "    Print only entries whose COMMUNITY attribute contains the given communities (in any order)" >&2
+    echo "  -M <communities string>" >&2
+    echo "    Print only entries whose COMMUNITY attribute does not contain the given communities (in any order)" >&2
+    echo "  -p <path expression>" >&2
+    echo "    Print only entries whose AS PATH matches the given expression" >&2
+    echo "  -P <path expression>" >&2
+    echo "    Print only entries whose AS PATH does not match the given expression" >&2
+    echo "  -r <prefix>" >&2
+    echo "    Print only entries containing subnets or supernets of the given prefix (including the prefix itself)" >&2
+    echo "  -R <file>" >&2
+    echo "    Print only entries containing subnets or supernets of any prefix listed in file (including the prefix itself)" >&2
+    echo "  -s <subnet>" >&2
+    echo "    Print only entries containing subnets of the given prefix" >&2
+    echo "  -S <file>" >&2
+    echo "    Print only entries containing subnets of any prefix listed in file" >&2
+    echo "  -t <attribute code>" >&2
+    echo "    Print only entries containing the given interesting attribute" >&2
+#    echo "  -T <file>" >&2
+#    echo "    Print only entries containing any of the interesting attributes listed in file" >&2
+    echo "  -u <prefix>"
+    echo "    Print only entries containing supernets of the given prefix (including the prefix itself)" >&2
+    echo "  -U <file>" >&2
+    echo "    Print only entries containing supernets of any prefix listed in file (including the prefix itself)" >&2
+    exit 1
+}
+
+chkint() {
+    case "$1" in
+    ''|*[!0-9]*) die "'$1': Non negative integer expected";;
+    *) ;;
+    esac
+}
+isip4() {
+    for i in 1 2 3 4; do
+        case $(echo "$1" | cut -d. -f"$i") in
+        [0-9]|[0-9][0-9]|[0-1][0-9][0-9]|2[0-4][0-9]|25[0-5]) ;;
+        *) return 1;;
+        esac
+    done
+}
+isip6() {
+    test "$( \
+        echo "$1" | \
+        grep -Ec '^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]).){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]).){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$' \
+    )" -eq 1
+}
+chkip() {
+    isip4 "$1" || isip6 "$1" || die "'$1': Invalid IP address"
+}
+chkprefix() {
+    case "$1" in
+    */*) chkint "${1#*/}" && chkip "${1%/*}";;
+    *) chkip "$1";;
+    esac
+}
+chknospc() {
+    case "$1" in
+    ''|*[![:space:]]*) die "'$1': Invalid argument";;
+    *) ;;
+    esac
+}
+chkcomm() {
+    case "$1" in
+    ''|*[![:space:][:alnum:]\:]*) die "'$1': Invalid COMMUNITY expression";;
+    *) ;;
+    esac
+}
+chkrexp() {
+    case "$1" in
+    ''|*[![:digit:][:space:]^$\?\*]*) die "'$1': Invalid AS_PATH expression";;
+    *) ;;
+    esac
+}
+
+templatef() {
+    TPL=$(mktemp)
+    [ $? -eq 0 ] || exit 1
+
+    sed -e 's/#.*$//g' "$1" | awk 'BEGIN {
+        FPAT = "([^ ]*)|(\"[^\"]*\")"
+    } {
+        for (i=1; i<=NF; i++) { print $i }
+    }' | while read -r TOK; do
+        [ -z "$TOK" ] && continue
+
+        UNQL="${TOK%\"}"
+        UNQR="${TOK#\"}"
+        UNQ="${UNQL#\"}"
+        [ "$UNQL" != "$UNQR" ] && die "'$TOK': Illegal misquoted or multiline token"
+
+        [ -n "$2" ] && "$2" "$UNQ"
+        [ $? -ne 0 ] && exit 1
+
+        echo "$UNQ"
+    done > "$TPL" || die "'$1': File conversion failed"
+
+    echo "$TPL"
+}
+
+append() {
+    echo "${1:+${1}${3:+ ${3}} }${2}"
+}
+
+TERM=""
+EXPR=""
+
+appendtermargs() {
+    _T=$1; shift
+    TERM="$_T ( $* )"
+}
+
+appendtermfiles() {
+    _T=$1; shift
+
+    for i in "$@"; do _L=$(append "$_L" "$_T $i" "-or"); done
+
+    [ -n "$TERM" ] && TERM="( $TERM -or $_L )" || TERM="$_L"
+}
+
+pushterm() {
+    if [ -n "$TERM" ]; then EXPR=$(append "$EXPR" "$TERM"); TERM=""; fi
+}
+
+exprcompile() {
+    [ -n "$PEERAS" ] || [ -n "$PEERADDR" ] && appendtermargs -peer $PEERAS $PEERADDR
+    [ -n "$PEERASF" ] || [ -n "$PEERADDRF" ] && appendtermfiles -peer $PEERASF $PEERADDRF
+    pushterm
+
+    for i in $ATTRS; do TERM=$(append "$TERM" "-attr $i" "-or"); done
+    [ "$(echo "$ATTRS" | wc -w)" -gt 1 ] && TERM="( $TERM )"
+    pushterm
+
+    [ -n "$NCOMMS" ] && TERM="-not -communities ( $NCOMMS )"
+    [ -n "$COMMS" ] && TERM=$(append "$TERM" "-all-communities ( $COMMS )" "-or")
+    [ -n "$NCOMMS" ] && [ -n "$COMMS" ] && TERM="( $TERM )"
+    pushterm
+
+    [ -n "$EXACT" ] && appendtermargs -exact $EXACT
+    [ -n "$EXACTF" ] && appendtermfiles -exact $EXACTF
+    pushterm
+    [ -n "$SUBNETS" ] && appendtermargs -subnet $SUBNETS
+    [ -n "$SUBNETSF" ] && appendtermfiles -subnet $SUBNETSF
+    pushterm
+    [ -n "$SUPNETS" ] && appendtermargs -supernet $SUPNETS
+    [ -n "$SUPNETSF" ] && appendtermfiles -supernet $SUPNETSF
+    pushterm
+    [ -n "$RELATED" ] && appendtermargs -related $RELATED
+    [ -n "$RELATEDF" ] && appendtermfiles -related $RELATEDF
+    pushterm
+
+    if [ "$LOOPS" != unspec ]; then
+        [ "$LOOPS" = yes ] && TERM="-loops" || TERM="-not -loops"
+        pushterm
+    fi
+
+    [ -n "$REXPS" ] && TERM="-aspath \"$REXPS\""
+    [ -n "$NREXPS" ] && TERM=$(append "$TERM" "-not -aspath \"$NREXPS\"" "-or")
+    [ -n "$REXPS" ] && [ -n "$NREXPS" ] && TERM="( $TERM )"
+    pushterm
+}
+
+GOTEXACT=""; GOTRELATED=""; GOTSUBNETS=""; GOTSUPNETS=""
+while getopts "a:A:cde:E:fi:I:lLo:m:M:p:P:r:R:s:S:t:T:u:U:" o; do
+    case $o in
+    a) chkint "$OPTARG"
+       PEERAS=$(append "$PEERAS" "$OPTARG")
+       ;;
+    A) TPL=$(templatef "$OPTARG" chkint) || exit 1
+       PEERASF=$(append "$PEERASF" "$TPL")
+       ;;
+    c) die "Sorry, option -c is not supported yet!"
+       ;;
+    d) DUMPBYTEC=yes
+       ;;
+    e) chkprefix "$OPTARG"
+       GOTEXACT=y; EXACT=$(append "$EXACT" "$OPTARG")
+       ;;
+    E) TPL=$(templatef "$OPTARG" chkprefix) || exit 1
+       GOTEXACT=y; EXACTF=$(append "$EXACTF" "$TPL")
+       ;;
+    f) TGT=peerindex
+       ;;
+    i) chkip "$OPTARG"
+       PEERADDR=$(append "$PEERADDR" "$OPTARG")
+       ;;
+    I) TPL=$(templatef "$OPTARG" chkip) || exit 1
+       PEERADDRF=$(append "$PEERADDRF" "$TPL")
+       ;;
+    l) LOOPS=yes
+       ;;
+    L) LOOPS=no
+       ;;
+    m) chkcomm "$OPTARG"
+       COMMS=$(append "$COMMS" "$OPTARG")
+       ;;
+    M) chkcomm "$OPTARG"
+       NCOMMS=$(append "$NCOMMS" "$OPTARG")
+       ;;
+    o) OUTREDIR="$OPTARG"
+       ;;
+    p) chkrexp "$OPTARG"
+       REXPS=$(append "$REXPS" "$(echo "$OPTARG" | tr "?" ".")" "|")
+       ;;
+    P) chkrexp "$OPTARG"
+       NREXPS=$(append "$NREXPS" "$(echo "$OPTARG" | tr "?" "." )" "|")
+       ;;
+    r) chkprefix "$OPTARG"
+       GOTRELATED=y; RELATED=$(append "$RELATED" "$OPTARG")
+       ;;
+    R) TPL=$(templatef "$OPTARG" chkprefix) || exit 1
+       GOTRELATED=y; RELATEDF=$(append "$RELATEDF" "$TPL")
+       ;;
+    s) chkprefix "$OPTARG"
+       GOTSUBNETS=y; SUBNETS=$(append "$SUBNETS" "$OPTARG")
+       ;;
+    S) TPL=$(templatef "$OPTARG" chkprefix) || exit 1
+       GOTSUBNETS=y; SUBNETSF=$(append "$SUBNETSF" "$TPL")
+       ;;
+    t) chknospc "$OPTARG"
+       ATTRS=$(append "$ATTRS" "$OPTARG")
+       ;;
+    T) die "Sorry, option -T is not supported yet!"
+       ;;
+    u) chkprefix "$OPTARG"
+       GOTSUPNETS=y; SUPNETS=$(append "$SUPNETS" "$OPTARG")
+       ;;
+    U) TPL=$(templatef "$OPTARG" chkprefix) || exit 1
+       GOTSUPNETS=y; SUPNETSF=$(append "$SUPNETSF" "$TPL")
+       ;;
+    ?) usage
+       ;;
+    esac
+done
+
+GOTNETS="${GOTSUBNETS}${GOTSUPNETS}${GOTEXACT}${GOTRELATED}"
+
+shift $(( OPTIND-1 ))
+
+exprcompile
+
+[ -n "$EXPR" ] && [ "$TGT" != bgpgrep ] && die "Conflicting options"
+[ -n "$GOTNETS" ] && [ "$GOTNETS" != "y" ] && die "Conflicting options"
+
+[ "$TGT"  = bgpgrep ] && [ "$DUMPBYTEC" = yes ] && OPTS=$(append "$OPTS" --dump-bytecode)
+[ "$TGT" != bgpgrep ] && OPTS=-r
+
+[ -n "$OUTREDIR" ] && OPTS=$(append "$OPTS" "-o $OUTREDIR")
+
+CMD="echo"
+[ -n "$PRETEND" ] && [ "$PRETEND" = 1 ] || [ "$PRETEND" = y ] || [ "$PRETEND" = yes ] && CMD="echo"
+
+"$CMD" "$TGT" $OPTS -- "$@" $EXPR

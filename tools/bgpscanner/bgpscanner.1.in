@@ -1,0 +1,484 @@
+'\" et
+.TH BGPSCANNER 1 @VERSION@ BGPSCANNER "User Commands"
+.\"
+.SH NAME
+@UTILITY@
+\(em legacy wrapper script for backwards compatibility with Isolario
+.IR bgpscanner
+CLI
+.SH SYNOPSIS
+.LP
+.nf
+@UTILITY@ \fB[\fIOPTIONS\fB]\fR... \fB[\fIFILES\fB]\fR...
+.fi
+
+.SH DESCRIPTION
+The legacy
+.IR @UTILITY@
+wrapper script is a drop in wrapper script to remap most invocations of the
+Isolario
+.IR bgpscanner
+CLI to any relevant
+.IR \[*m]bgpsuite
+utility.
+
+The legacy
+.IR @UTILITY@
+wrapper may be used to ease transition phase to tools offered by the
+.IR "\[*m]bgpsuite" .
+A pretend mode is also available, to print the command that would need to
+be executed to perform the same operations as the provided
+.IR bgpscanner
+CLI invocation.
+This is especially useful to users familiar with the old
+.IR bgpscanner
+CLI to learn the new syntax.
+See the
+.IR "PRETEND MODE"
+section below for details.
+
+Anyone unfamiliar with Isolario
+.IR bgpscanner
+and wishing to take advantage of the
+.IR "\[*m]bgpsuite"
+tools is probably reading the wrong man page.
+See
+.IR bgpgrep (1)
+and
+.IR peerindex (1)
+for equivalent and more advanced functionality.
+
+For reference, Isolario
+.IR bgpscanner
+supports a more rudimentary filtering model compared to
+.IR bgpgrep (1).
+For every MRT dump in
+.IR FILES
+Isolario
+.IR bgpscanner
+reconstructs the original BGP message and applies the filtering rules specified by
+.IR OPTIONS
+(if any). Failing to meet such rules causes the BGP message to be dropped
+from output.
+The filtering process follows the sequence:
+.IP
+.PD 0
+.IP 1 5
+Filtering by peer (aka feeder in Isolario jargon), which may discard a message based on the announcing peer.
+.IP 2 5
+Filtering by attributes, which may discard a message based on the presence of specific attributes of interest.
+.IP 3 5
+Filtering by AS_PATH, which may discard a message based on the routes it contains.
+.IP 4 5
+Filtering by prefixes, which may discard a message based on the prefixes available in its NLRI and WITHDRAWN fields.
+.PD
+.PP
+Multiple criteria may be occur for each phase, resulting in implicitly
+.IR OR ing
+together multiple conditions.
+
+.SH OPTIONS
+The following backwards compatibility options are supported:
+
+.IP "\fB\-a \fI<peer AS>\fP" 10
+Print only entries coming from the given peer ASN.
+
+.IP "\fB\-A \fI<file>\fP" 10
+Print only entries coming from any peer ASN listed in a template file, see
+.IR "FILTER TEMPLATE FILES"
+section below for details.
+
+.IP "\fB\-d\fP" 10
+Dump BGP filter bytecode to stderr (debug option).
+
+.IP "\fB\-e \fI<prefix>\fP" 10
+Print only entries containing the exact prefix of interest.
+.IP "\fB\-E \fI<file>\fP" 10
+Print only entries containing exactly any prefix of interest listed in file,
+see
+.IR "FILTER TEMPLATE FILES"
+section below for details.
+
+.IP "\fB\-f\fP" 10
+Print every peer IP address inside RIBs provided as input files.
+
+.IP  "\fB\-i \fI<peer IP>\fP" 10
+Print only entries coming from a given peer IP address.
+
+.IP "\fB\-I \fI<file>\fP" 10
+(The uppercase letter i.) Print only entries coming from any peer IP address listed in file,
+see
+.IR "FILTER TEMPLATE FILES"
+section below for details.
+
+.IP "\fB\-l\fP" 10
+(The letter ell.) Print only entries with loops in their AS_PATH.
+
+.IP "\fB\-L\fP" 10
+Opposite of
+.IR \-l ,
+print only entries without loops in their AS_PATH.
+
+.IP "\fB\-o \fI<file>\fP" 10
+Redirect output to file (defaults to standard output).
+If option occurs multiple times, last one prevails.
+
+.IP "\fB\-m \fI<communities string>\fP" 10
+Print only entries whose COMMUNITY attribute contains the given communities (in any order).
+Communities must be specified in canonical form and space separated, for example: `1234:567 8910:1112'.
+Well\-known communities can also be specified according to IANA (see
+.IR STANDARDS ),
+for example NO_EXPORT.
+
+.IP "\fB\-M \fI<communities string>\fP" 10
+Opposite of
+.IR \-m ,
+only prints entries whose COMMUNITY attribute does
+.B not
+contain the given communities (in any order).
+
+.IP "\fB\-p \fI<path expression>\fP" 10
+Print only entries whose AS_PATH matches the provided expression.
+This option accepts expressions in a syntax resembling a heavily simplified
+form of POSIX basic regular expressions.
+See section
+.IR "AS PATH MATCH EXPRESSIONS"
+for details.
+
+.IP "\fB\-P \fI<path expression>\fP" 10
+Opposite of
+.IR \-p ,
+only prints entries whose AS_PATH does
+.B not
+match the provided expression.
+
+.IP "\fB\-r \fI<prefix>\fP" 10
+Print only entries containing subnets or supernets of the given prefix (including the prefix itself).
+
+.IP "\fB\-R \fI<file>\fP" 10
+Print only entries containing subnets or supernets of any prefix listed in file (including the prefix itself),
+see section
+.IR "FILTER TEMPLATE FILES"
+for details.
+
+.IP "\fB\-s \fI<subnet>\fP" 10
+Print only entries containing subnets of the given prefix.
+
+.IP "\fB\-S \fI<file>\fP" 10
+Print only entries containing subnets of any prefix listed in file,
+see section
+.IR "FILTER TEMPLATE FILES"
+for details.
+
+.IP "\fB\-t \fI<attribute code>\fP" 10
+Print only entries containing the given interesting attribute.
+
+.IP "\fB\-u \fI<prefix>\fP" 10
+Print only entries containing supernets of the given prefix
+(including the prefix itself).
+
+.IP "\fB\-U \fI<file>\fP" 10
+Print only entries containing supernets of any prefix listed in file
+(including the prefix itself),
+see section
+.IR "FILTER TEMPLATE FILES"
+for details.
+
+.SH OPERANDS
+The following operands are supported:
+.TP
+.B FILE
+A pathname of an input file. If no file operands are specified, the standard input is used.
+If a file is `-',
+.IR @UTILITY@
+shall read from the standard input at that point in the sequence.
+.B bgpscanner
+does not close and reopen standard input when it is referenced in this way, but accepts multiple occurrences of `-' as a file operand.
+See the
+.IR "INPUT FILES"
+section for details on the supported file formats.
+
+.SH "AS PATH MATCH EXPRESSIONS"
+AS_PATH match expressions (accepted by
+.IR \-p
+and
+.IR \-P
+options) use a simplified format based on typical conventions estabilished by
+POSIX regular expressions. The most basic example is the position idependent AS_PATH matching,
+an expression such as:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "1\ 2"
+.in
+\&
+.fi
+matches any message whose AS_PATH crosses link `AS1 AS2'. The `AS1 AS2' link may appear anywhere in
+AS_PATH. The expression can be arbitrarily complex, for example:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "1\ 2\ 3\ 4\ 5\ 6\ 7\ 8"
+.in
+\&
+.fi
+matches any message with the corresponding ASN subsequence appearing anywhere in its AS_PATH.
+A `?' (question mark) may be placed anywhere in the expression to signal the fact that any ASN may
+appear in that position, for example:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "1\ ?\ 3"
+.in
+\&
+.fi
+matches any message whose AS_PATH contains a subsequence of length 3, whose first ASN is AS1 and the last one is AS3.
+.P
+Matching expressions may be constrained to operate to the beginning or the end of the AS PATH.
+By prepending `^' (caret) to the expression, the following ASN are required to appear at the beginning of the path,
+for example:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "^1\ 2"
+.in
+\&
+.fi
+matches any message whose AS_PATH starts with the link `AS1 AS2'.
+In a similar fashion, the expression may be forced to match at the end of the path by appending a `$' (dollar sign) at the end.
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "1\ 2$"
+.in
+\&
+.fi
+matches any message whose AS_PATH ends with the link `AS1 AS2'.
+A `?' may be used to match any ASN in the corresponding position, for example:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "1\ ?$"
+.in
+\&
+.fi
+matches any message whose AS_PATH is ending with the second to last ASN being AS1.
+The `^' and `$' symbols may be used to create exact matches, such as:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "^1\ 2\ 3\ 4$"
+.in
+\&
+.fi
+matches any message whose AS PATH is exactly `AS1 AS2 AS3 AS4'.
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "^1\ 2\ ?\ 4$"
+.in
+\&
+.fi
+matches any message whose AS_PATH starts with `AS1 AS2' and ends with AS4, but may have any ASN
+in the second to last position.
+A `*' (star) may be used to match zero or more ASN in the position.
+Note that if the intended usage is to match
+.B one
+or more ASN, then a `?' symbol
+should be used before the `*'. For example:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "^1\ 2\ *\ 4$"
+.in
+\&
+.fi
+matches any message whose AS PATH starts with `AS1 AS2', then contains
+.B zero
+or more ASN and ends with AS4.
+.nf
+\&
+.in +2m
+@UTILITY@\ \-p\ "^1\ 2\ ?\ *\ 4$"
+.in
+\&
+.fi
+matches any message whose AS_PATH starts with `AS1 AS2', then contains
+.B one
+or more ASN and terminates with AS4.
+The metacharacters explained above may be mixed to create arbitrarily complex expressions.
+.P
+As a backwards compatibility note, please note that Isolario
+.IR bgpscanner
+AS_PATH expression syntax differs from
+.IR bgpgrep (1)'s
+in that a `?' character signifies "any ASN" rather than "match zero or one time"
+(see section
+.IR "AS_PATH REGULAR EXPRESSIONS"
+of
+.IR bgpgrep (1)
+documentation for details). There is no equivalent to
+.IR bgpgrep (1)'s
+`?' in Isolario
+.IR bgpscanner
+AS_PATH matching expressions.
+
+.SH FILTER TEMPLATE FILES
+A number of options offer variants reading their arguments from a template file
+(for example the
+.IR \-e
+option allows an alternate
+.IR \-E
+variant to read each prefix directly from file). This provides means to create
+filter templates that may be further refined by additional inline options.
+Writing a template file may eliminate the burden of repeatedly typing prefixes that are known
+to be always relevant across multiple executions, leaving only prefixes that may genuinely
+change to be specified, for example:
+.nf
+\&
+.in +2m
+@UTILITY@\ \-E\ template.txt\ \-e\ "192.65.121.0/24"
+.in
+\&
+.fi
+Template file is expected to contain a space separated list of tokens in the same format as
+the ones expected by the non-template variant of the option. Note that newlines are considered
+spaces.
+Comments may be freely inserted in the file by prepending them with the `#' (hash) character, anything following
+`#' is ignored up to the next newline.
+Tokens containing spaces may be enclosed in `"' (quotes) to preserve them.
+Template files support the usual C-style character escape sequences.
+.P
+As an implementation note, the
+.IR @UTILITY@
+wrapper translates every historical Isolario
+.IR bgpscanner
+template file to an equivalent
+.IR bgpgrep (1)
+template inside a temporary file, that is later feed to
+.IR bgpgrep (1),
+an interested user may inspect the resulting file to learn about the differences
+in syntax.
+.P
+Also note that Isolario
+.IR bgpscanner
+used the `#' character to mark comments, while
+.IR bgpgrep (1)
+uses C and C++ style comments.
+
+.SH "LINE ORIENTED OUTPUT"
+The
+.IR @UTILITY@
+wrapper output is identical to the output produced by
+.IR bgpgrep (1)
+and
+.IR peerindex (1),
+depending on the
+.IR OPTIONS
+specified.
+See
+.IR bgpgrep (1)
+and
+.IR peerindex (1)
+documentation for details.
+
+.SH "PRETEND MODE"
+The
+.IR @UTILITY@
+wrapper may operate in pretend mode, whenever the
+.B PRETEND
+environment variable is set and equal to any of the values
+documented in the
+.IR "ENVIRONMENT VARIABLES"
+section.
+In pretend mode, the
+.IR @UTILITY@
+wrapper will not execute any command, instead it will print the command
+that would be executed. This may serve as a debug tool, or a learning tool
+to display how to perform a known Isolario
+.IR bgpscanner
+task using
+.IR \[*m]bgpsuite
+native tools.
+
+.SH "ENVIRONMENT VARIABLES"
+The following environment variables affect the execution of the
+.IR @UTILITY@
+wrapper:
+
+.IP "\fBPRETEND\fP" 10
+Determines whether pretend mode is enabled (see
+.IR "PRETEND MODE"
+for details).
+.IR "PRETEND MODE"
+is enabled whenever
+.B PRETEND
+is defined and its value is equal to 1, `y' or `yes` (in a case sensitive way).
+
+.SH "EXIT STATUS"
+The
+.IR @UTILITY@
+wrapper has the same exit values as
+.IR bgpgrep (1)
+and
+.IR peerindex (1),
+see their respective documentation for details.
+
+.SH STDIN
+The
+.IR @UTILITY@
+standard input usage is identical to
+.IR bgpgrep (1)
+and
+.IR peerindex (1).
+See their respective documentation for details.
+
+.SH "INPUT FILES"
+The
+.IR @UTILITY@
+supports any input file supported by
+.IR bgpgrep (1)
+and
+.IR peerindex (1).
+See their respective documentation for details.
+
+.SH STDOUT
+Unless redirected explicitly via
+.IR OPTIONS ,
+the standard output is used to print a human readable text
+representation of BGP message data, nothing else shall be written
+to the standard output.
+.IR @UTILITY@
+may detect and treat as error whenever the standard output is a regular file,
+and is the same file as any of the
+.IR FILES
+arguments.
+The default output format used by
+.IR @UTILITY@
+is documented in the
+.IR "LINE ORIENTED OUTPUT"
+section.
+
+.SH STDERR
+The standard error is used only for diagnostic messages and error reporting.
+
+.SH SEE ALSO
+.IR bgpgrep (1),
+.IR peerindex (1)
+
+.SH STANDARDS
+The
+.IR @UTILITY@
+adheres to the same standards as
+.IR bgpgrep (1)
+and
+.IR peerindex (1)
+see their respective documentations for details.
+
+.SH AUTHOR
+The
+.IR @UTILITY@
+wrapper script was written by
+.UR lcg@\:inventati.\:org
+Lorenzo Cogotti
+.UE .
