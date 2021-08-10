@@ -320,7 +320,7 @@ exprcompile
 
 [ -n "$OUTREDIR" ] && OPTS=$(append "$OPTS" "-o $OUTREDIR")
 
-CMD="echo"
+CMD="exec"
 [ -n "$PRETEND" ] && [ "$PRETEND" = 1 ] || [ "$PRETEND" = y ] || [ "$PRETEND" = yes ] && CMD="echo"
 
 "$CMD" "$TGT" $OPTS -- "$@" $EXPR
