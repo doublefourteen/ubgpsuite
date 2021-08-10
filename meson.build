@@ -31,8 +31,8 @@ bz2_dep  = cc.find_library('bz2', required : true)
 lzma_dep = dependency('liblzma', version: '>=5.1.1')
 m_dep = cc.find_library('m', required : false)
 
-lonetix_incdir = 'lonetix/include/df'
-lonetix_incdir_local = 'lonetix'
+lonetix_incdir = include_directories('lonetix/include/df')
+lonetix_incdir_local = include_directories('lonetix')
 
 lonetix = static_library('lonetix',
     sources : [
