@@ -129,7 +129,7 @@ chkprefix() {
 }
 chknospc() {
     case "$1" in
-    ''|*[![:space:]]*) die "'$1': Invalid argument";;
+    ''|*[[:space:]]*) die "'$1': Invalid argument";;
     *) ;;
     esac
 }
