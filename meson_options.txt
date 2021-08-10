@@ -1,6 +1,7 @@
 option('native', type : 'boolean', value : false, description : 'Optimize build for local CPU architecture (ties build artifacts to your local machine!)')
 option('build-doc', type : 'boolean', description : 'Build documentation using doxygen')
 # TODO option('build-benchmarks', type : 'boolean', value : false, description : 'Build benchmarks')
-# TODO option('build-tests', type : 'boolean', value : false, description : 'Build unit tests')
+option('build-tests', type : 'boolean', value : false, description : 'Build tests')
 option('build-bgpgrep', type : 'boolean', description : 'Build bgpgrep MRT/BGP parsing and filting utility')
 option('build-peerindex', type : 'boolean', description : 'Build peerindex MRT TABLE_DUMPV2 Peer Index Table inspection tool')
+option('bgpscanner-legacy', type : 'boolean', value : false, description : 'Install a legacy wrapper script for backwards compatibility with Isolario bgpscanner')

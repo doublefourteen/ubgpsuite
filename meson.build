@@ -156,3 +156,29 @@ if get_option('build-peerindex')
 
     install_man(peerindex_man)
 endif
+if get_option('bgpscanner-legacy')
+    supported_systems = [
+        'cygwin', 'darwin', 'dragonfly',
+        'freebsd', 'gnu', 'linux',
+        'netbsd', 'openbsd', 'sunos',
+    ]
+
+    if supported_systems.contains(host_machine.system())
+        cdata = configuration_data({
+            'UTILITY': 'bgpscanner',
+            'VERSION': '"' + meson.project_version() + '"',
+        })
+        bgpscanner_man = configure_file(input : 'tools/bgpscanner/bgpscanner.1.in',
+                                        output : 'bgpscanner.1',
+                                        configuration : cdata,
+                                        install : false)
+
+        install_data('tools/bgpscanner/bgpscanner',
+                    install_dir : get_option('bindir'),
+                    install_mode : 'rwxr-xr-x')
+
+        install_man(bgpscanner_man)
+    else
+        message('Skipping bgpscanner legacy wrapper installation on ' + host_machine.system())
+    endif
+endif
