@@ -166,7 +166,7 @@ templatef() {
         printf %s\\n "$UNQ"
     done > "$TPL" || die "'$1': File conversion failed"
 
-    echo "$TPL"
+    printf %s\\n "$TPL"
 }
 
 quote() { printf %s\\n "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/"; }
@@ -199,7 +199,7 @@ exprcompile() {
     pushterm
 
     for i in $ATTRS; do TERM=$(append "$TERM" "-attr $i" "-or"); done
-    [ "$(echo "$ATTRS" | wc -w)" -gt 1 ] && TERM="\( $TERM \)"
+    [ "$(printf %s\\n "$ATTRS" | wc -w)" -gt 1 ] && TERM="\( $TERM \)"
     pushterm
 
     [ -n "$NCOMMS" ] && TERM="-not -communities \( $NCOMMS \)"
