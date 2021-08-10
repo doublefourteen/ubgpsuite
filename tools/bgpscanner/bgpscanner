@@ -169,7 +169,7 @@ templatef() {
     echo "$TPL"
 }
 
-quote () { printf %s\\n "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/"; }
+quote() { printf %s\\n "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/"; }
 
 append() { printf %s\\n "${1:+${1}${3:+ ${3}} }${2}"; }
 
