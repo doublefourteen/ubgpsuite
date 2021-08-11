@@ -321,11 +321,12 @@ exprcompile
 [ "$TGT"  = bgpgrep ] && [ "$DUMPBYTEC" = yes ] && OPTS=$(append "$OPTS" --dump-bytecode)
 [ "$TGT" != bgpgrep ] && OPTS=-r
 
-[ -n "$OUTREDIR" ] && OPTS=$(append "$OPTS" "-o $OUTREDIR")
+[ -n "$OUTREDIR" ] && OPTS=$(append "$OPTS" "-o \"$OUTREDIR\"")
 
 CMD="exec"
 if [ -n "$PRETEND" ] && [ "$PRETEND" = 1 ] || [ "$PRETEND" = y ] || [ "$PRETEND" = yes ]; then
     CMD="echo"
+    OPTS=$(quote "$OPTS")
     EXPR=$(quote "$EXPR")
 fi
 
