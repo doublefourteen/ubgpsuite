@@ -16,9 +16,13 @@
 #include <assert.h>
 #include <string.h>
 
-static void *MRT_DATAPTR(const Mrtrecord *rec)
+static void *MRT_DATAPTR(const Mrtrecord *rec, size_t *len)
 {
-	return rec->buf + MRT_HDRSIZ + (MRT_ISEXHDRTYPE(MRT_HDR(rec)->type) << 2);
+	const Mrthdr *hdr = MRT_HDR(rec);
+	Uint32        off = MRT_ISEXHDRTYPE(hdr->type) << 2;
+
+	*len = beswap32(hdr->len) - off;
+	return rec->buf + MRT_HDRSIZ + off;
 }
 
 Judgement Bgp_MrtFromBuf(Mrtrecord *rec, const void *buf, size_t nbytes)
@@ -28,9 +32,9 @@ Judgement Bgp_MrtFromBuf(Mrtrecord *rec, const void *buf, size_t nbytes)
 
 	const Mrthdr *hdr = (const Mrthdr *) buf;
 
-	size_t left = beswap32(hdr->len);
-	if (MRT_ISEXHDRTYPE(hdr->type))
-		left += 4;  // account for extended timestamp
+	size_t left = beswap32(hdr->len);            // NOTE: Includes extended timestamp size, if any!
+	if (left < 4 && MRT_ISEXHDRTYPE(hdr->type))  // ...so check it
+		return Bgp_SetErrStat(BGPETRUNCMRT);
 
 	size_t siz = sizeof(*hdr) + left;
 	if (siz > nbytes)
@@ -63,12 +67,12 @@ Judgement Bgp_ReadMrt(Mrtrecord *rec, void *streamp, const StmOps *ops)
 	if ((size_t) n != sizeof(hdr))
 		return Bgp_SetErrStat(BGPEIO);
 
-	size_t left = beswap32(hdr.len);
-	if (MRT_ISEXHDRTYPE(hdr.type))
-		left += 4;  // account for extended timestamp
+	size_t left = beswap32(hdr.len);            // NOTE: Includes extended timestamp size, if any!
+	if (left < 4 && MRT_ISEXHDRTYPE(hdr.type))  // ...so check it
+		return Bgp_SetErrStat(BGPETRUNCMRT);
 
 	// Allocate buffer
-	// NOTE: MRT header length doesn't account for header size itself
+	// NOTE: ...but MRT header length doesn't account for header size itself
 	size_t siz           = sizeof(hdr) + left;
 	const MemOps *memOps = MRT_MEMOPS(rec);
 
@@ -517,11 +521,12 @@ Bgp4mphdr *Bgp_GetBgp4mpHdr(Mrtrecord *rec, size_t *nbytes)
 		return NULL;
 	}
 
-	size_t len    = beswap32(hdr->len);
-	size_t offset = 0;
+	size_t len;
 	Afi    afi;
 
-	Bgp4mphdr *bgp4mp = (Bgp4mphdr *) MRT_DATAPTR(rec);
+	size_t offset = 0;
+
+	Bgp4mphdr *bgp4mp = (Bgp4mphdr *) MRT_DATAPTR(rec, &len);
 	if (BGP4MP_ISASN32BIT(hdr->subtype)) {
 		offset += 2 * 4;
 		offset += 2 + 2;
@@ -572,8 +577,8 @@ Judgement Bgp_UnwrapBgp4mp(Mrtrecord *rec, Bgpmsg *dest, unsigned flags)
 	if (!BGP4MP_ISMESSAGE(hdr->subtype))
 		return Bgp_SetErrStat(BGPEBADMRTTYPE);
 
-	Uint32 len  = beswap32(hdr->len);
-	Uint8 *base = (Uint8 *) MRT_DATAPTR(rec);
+	size_t len;
+	Uint8 *base = (Uint8 *) MRT_DATAPTR(rec, &len);
 
 	// Skip header
 	size_t siz = BGP4MP_ISASN32BIT(hdr->subtype) ? 2*4 : 2*2;  // skip ASN

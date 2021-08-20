@@ -153,6 +153,12 @@ static const char *Bgp_KnownCommunityToString(BgpCommCode code)
 	}
 }
 
+static void NormalizeExtendedTimestamp(Dumpfmtctx *ctx)
+{
+	ctx->timestamp += ctx->microsecs / 1000000;
+	ctx->microsecs %= 1000000;
+}
+
 static void DumpUnknown(Stmbuf *sb, BgpType type)
 {
 	Bufio_Putc(sb, UNKNOWN_MARKER);
@@ -420,7 +426,7 @@ static void DumpMrtInfoTrailer(Stmbuf *sb, const Dumpfmtctx *ctx)
 		Bufio_Putu(sb, ctx->timestamp);
 		if (ctx->microsecs > 0) {
 			Utoa(ctx->microsecs, buf);
-			Df_strpadl(buf, '0', 9);
+			Df_strpadl(buf, '0', 6);
 
 			Bufio_Putc(sb, '.');
 			Bufio_Puts(sb, buf);
@@ -941,14 +947,25 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 	ctx.isAsn32bit   = BGP4MP_ISASN32BIT(hdr->subtype);
 	ctx.isAddPath    = BGP4MP_ISADDPATH(hdr->subtype);
 	ctx.timestamp    = beswap32(hdr->timestamp);
-	if (hdr->type == MRT_BGP4MP_ET)
+	if (hdr->type == MRT_BGP4MP_ET) {
+		// Length must account for extended timestamp
+		if (len < 4) goto corrupt;
+
 		ctx.microsecs = beswap32(((const Mrthdrex *) hdr)->microsecs);
+		len -= 4;
+
+		NormalizeExtendedTimestamp(&ctx);
+	}
 
 	ctx.hdr = hdr;
 
 	if (ctx.isAsn32bit) {
+		if (len < sizeof(bgp4mp->a32)) goto corrupt;
+
 		ctx.peerAs = beswap32(bgp4mp->a32.peerAs);
 		if (bgp4mp->a32.afi == AFI_IP) {
+			if (len < sizeof(bgp4mp->a32v4)) goto corrupt;
+
 			ctx.peerAddr.family = IP4;
 			ctx.peerAddr.v4     = bgp4mp->a32v4.peerAddr;
 
@@ -956,20 +973,28 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 		} else {
 			assert(bgp4mp->a32.afi == AFI_IP6);
 
+			if (len < sizeof(bgp4mp->a32v6)) goto corrupt;
+
 			ctx.peerAddr.family = IP6;
 			ctx.peerAddr.v6     = bgp4mp->a32v6.peerAddr;
 
 			offset = sizeof(bgp4mp->a32v6);
 		}
 	} else {
+		if (len < sizeof(bgp4mp->a16)) goto corrupt;
+
 		ctx.peerAs = beswap16(bgp4mp->a16.peerAs);
 		if (bgp4mp->a16.afi == AFI_IP) {
+			if (len < sizeof(bgp4mp->a16v4)) goto corrupt;
+
 			ctx.peerAddr.family = IP4;
 			ctx.peerAddr.v4     = bgp4mp->a16v4.peerAddr;
 
 			offset = sizeof(bgp4mp->a16v4);
 		} else {
 			assert(bgp4mp->a16.afi == AFI_IP6);
+
+			if (len < sizeof(bgp4mp->a16v6)) goto corrupt;
 
 			ctx.peerAddr.family = IP6;
 			ctx.peerAddr.v6     = bgp4mp->a16v6.peerAddr;
@@ -984,10 +1009,13 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 	if (BGP4MP_ISSTATECHANGE(hdr->subtype)) {
 		// Dump state change
 		BgpFsmState chng[2];
-		memcpy(chng, (Uint8 *) bgp4mp + offset, sizeof(chng));
 
 		Bufio_Putc(&sb, STATE_CHANGE_MARKER);
 		Bufio_Putc(&sb, SEP_CHAR);
+		if (len < offset + sizeof(chng)) goto corrupt;
+
+		memcpy(chng, (Uint8 *) bgp4mp + offset, sizeof(chng));
+
 		Bufio_Putu(&sb, beswap16(chng[0]));
 		Bufio_Putc(&sb, '-');
 		Bufio_Putu(&sb, beswap16(chng[1]));
@@ -1000,17 +1028,14 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 		size_t        nbytes = len - offset;
 
 		nbytes = Bgp_CheckMsgHdr(msg, nbytes, /*allowExtendedSize=*/TRUE);
-		if (nbytes != 0) {
-			// Header is OK
-			nbytes -= BGP_HDRSIZ;
-			DumpBgp(&sb, msg->type, msg + 1, nbytes, table, &ctx);
-		} else {
+		if (nbytes == 0) {
 			// Corrupted BGP4MP with invalid BGP data
 			Bufio_Putc(&sb, UNKNOWN_MARKER);
 			Bufio_Putc(&sb, SEP_CHAR);
-			WarnCorrupted(&sb, &ctx);
-			DumpMrtInfoTrailer(&sb, &ctx);
+			goto corrupt;
 		}
+
+		DumpBgp(&sb, msg->type, msg + 1, nbytes - BGP_HDRSIZ, table, &ctx);
 	} else {
 		// Deprecated/Unknown type
 		Bufio_Putc(&sb, UNKNOWN_MARKER);
@@ -1018,6 +1043,11 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 		DumpMrtInfoTrailer(&sb, &ctx);
 	}
 
+	return Bufio_Flush(&sb);
+
+corrupt:
+	WarnCorrupted(&sb, &ctx);
+	DumpMrtInfoTrailer(&sb, &ctx);
 	return Bufio_Flush(&sb);
 }
 

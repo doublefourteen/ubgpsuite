@@ -43,13 +43,13 @@ static Uint32 ParseFrac(const char *s, const char *p, char **ep)
 	if (res != NCVENOERR)
 		FATALF("%s: Expecting fractional portion of a second after '.'", s);
 
-	int    ndigs = endp - p;
-	double frac  = pow(10, ndigs);
+	int         ndigs = endp - p;
+	long double frac  = pow(10, ndigs);
 
 	if (ep)
 		*ep = endp;
 
-	return (Uint32) trunc((n / frac) * 100000.0);
+	return (Uint32) truncl(n / frac * 1000000.0L);
 }
 
 static Boolean ParseRfc3339(const char *s, Timestampop *dest)

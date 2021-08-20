@@ -678,7 +678,7 @@ typedef ALIGNED(1, union) {
 
 FORCE_INLINE Bgp4mphdr *BGP4MP_HDR(const Mrthdr *hdr)
 {
-	return (hdr->subtype == MRT_BGP4MP_ET) ?
+	return (hdr->type == MRT_BGP4MP_ET) ?
 	       (Bgp4mphdr *) ((const Mrthdrex *) hdr + 1) :
 	       (Bgp4mphdr *) (hdr + 1);
 }

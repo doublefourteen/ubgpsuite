@@ -65,6 +65,12 @@ static void FixBgpAttributeTableForRib(Bgpattrtab tab, Boolean isRibv2)
 	}
 }
 
+static void NormalizeExtendedTimestamp(void)
+{
+	S.timestampSecs      += S.timestampMicrosecs / 1000000;
+	S.timestampMicrosecs %= 1000000;
+}
+
 static void OutputBgp4mp(const Mrthdr *hdr, Bgpattrtab tab)
 {
 	S.lenientBgpErrors = TRUE;
@@ -90,8 +96,10 @@ void BgpgrepD_Bgp4mp(void)
 	S.peerAs             = BGP4MP_GETPEERADDR(hdr->subtype, &S.peerAddr, bgp4mp);
 	S.timestampSecs      = beswap32(hdr->timestamp);
 	S.timestampMicrosecs = 0;
-	if (hdr->subtype == MRT_BGP4MP_ET)
+	if (hdr->type == MRT_BGP4MP_ET) {
 		S.timestampMicrosecs = beswap32(((const Mrthdrex *) hdr)->microsecs);
+		NormalizeExtendedTimestamp();
+	}
 
 	// Dump MRT data
 	Bgp_UnwrapBgp4mp(&S.rec, &S.msg, /*flags=*/BGPF_UNOWNED);
