@@ -407,20 +407,23 @@ int main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	// Move to filtering rules and compile them
-	if (argc == 0) {
+	// Take file list
+	char **files  = argv;
+	int    nfiles = argc;
+
+	if (nfiles == 0) {
 		// If no FILES are provided, read from stdin
 		static const char *const stdinFile[] = { "-" };
 
-		argv = (char **) stdinFile;
-		argc = ARRAY_SIZE(stdinFile);
+		files  = (char **) stdinFile;
+		nfiles = ARRAY_SIZE(stdinFile);
 	}
 
 	volatile int i = 0;
 
 	setjmp(S.dropFileFrame);  // NOTE: The ONLY place where this is set
-	while (i < argc)
-		Peerindex_ProcessMrtDump(argv[i++]);
+	while (i < nfiles)
+		Peerindex_ProcessMrtDump(files[i++]);
 
 	if (S.outfOps->Close) S.outfOps->Close(S.outf);
 
