@@ -215,6 +215,9 @@ char **Sys_ListFiles(const char *path, unsigned *nfiles, const char *pat)
 		if (errno != ENOENT && errno != ENOTDIR)
 			Sys_SetErrStat(errno, "opendir()");
 
+		if (nfiles)
+			*nfiles = 0;
+
 		return NULL;
 	}
 
@@ -321,6 +324,10 @@ char **Sys_ListFiles(const char *path, unsigned *nfiles, const char *pat)
 
 fail:
 	closedir(dir);
+
+	if (nfiles)
+		*nfiles = 0;
+
 	return NULL;
 }
 
