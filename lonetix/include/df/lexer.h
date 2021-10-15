@@ -452,7 +452,7 @@ char *Lex_MatchTokenType(Lex *p, Tok *dest, int type, unsigned subtype);
  */
 char *Lex_CheckToken(Lex *p, const char *tok);
 /// Similar to `Lex_CheckToken()`, but matches by token `type` and `subtype`.
-char *Lex_CheckTokenType(Lex *, Tok *dest, int type, unsigned subtype);
+char *Lex_CheckTokenType(Lex *p, Tok *dest, int type, unsigned subtype);
 
 /**
  * \brief Peek next token from `p` and test whether it matches with `tok`.
