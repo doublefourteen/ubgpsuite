@@ -48,7 +48,7 @@ static const Punctuation p_punctuations[] = {
 	{ "<=", P_LOGIC_LEQ },     // pre-compiler
 	{ "==", P_LOGIC_EQ },      // pre-compiler
 	{ "!=", P_LOGIC_UNEQ },    // pre-compiler
-	// Arithmatic operators
+	// Arithmetic operators
 	{ "*=", P_MUL_ASSIGN },
 	{ "/=", P_DIV_ASSIGN },
 	{ "%=", P_MOD_ASSIGN },
@@ -64,7 +64,7 @@ static const Punctuation p_punctuations[] = {
 	{ "<<", P_LSHIFT },  // pre-compiler
 	// Reference operators
 	{ "->", P_POINTERREF },
-	// Arithmatic operators
+	// Arithmetic operators
 	{ "*", P_MUL },  // pre-compiler
 	{ "/", P_DIV },  // pre-compiler
 	{ "%", P_MOD },  // pre-compiler
@@ -561,7 +561,7 @@ static char *ReadNumber(Lex *p, Tok *tok)
 			subtype = TT_BIN | TT_INT;
 		} else {
 			// Octal number
-			AppendDirty(p, tok); NextChar(p);
+			AppendDirty(p, tok);
 
 			while (TRUE) {
 				char c = PeekChar(p);
@@ -920,8 +920,8 @@ static char *ReadPunct(Lex *p, Tok *tok)
 	if (!puncts)
 		puncts = p_punctuations;
 
-	for (size_t i = 0; p_punctuations[i].p; i++) {
-		const Punctuation *punc = &p_punctuations[i];
+	for (size_t i = 0; puncts[i].p; i++) {
+		const Punctuation *punc = &puncts[i];
 
 		size_t len = strlen(punc->p);
 
@@ -1287,7 +1287,7 @@ char *Lex_MatchToken(Lex *p, const char *match)
 		LexerError(p, "Read unexpected token '%s' while expecting '%s'", t, match);
 	else
 		LexerError(p, "Couldn't read expected token '%s'", match);
-	
+
 	return NULL;
 }
 
