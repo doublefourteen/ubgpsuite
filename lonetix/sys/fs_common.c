@@ -17,9 +17,8 @@ char *Sys_GetAbsoluteFileExtension(const char *path)
 	char *p = (char *) path;
 	char *sep = p, *extp = p;
 
-	// FIXME make it more reliable
 	while (*p != '\0') {
-		if (*p == '.' && extp == sep)
+		if (*p == '.' && extp == sep && p > sep + 1)
 			extp = p;
 		if (IsSep(*p))
 			extp = sep = p;
@@ -27,7 +26,7 @@ char *Sys_GetAbsoluteFileExtension(const char *path)
 		p++;
 	}
 
-	if (extp == sep)
+	if (extp == sep || *(extp+1) == '\0')
 		extp = p;  // no extensions in path
 
 	return extp;
@@ -38,9 +37,8 @@ char *Sys_GetFileExtension(const char *path)
 	char *p = (char *) path;
 	char *sep = p, *extp = p;
 
-	// FIXME make it more reliable
 	while (*p != '\0') {
-		if (*p == '.')
+		if (*p == '.' && p > sep + 1)
 			extp = p;
 		if (IsSep(*p))
 			sep = extp = p;
@@ -48,7 +46,7 @@ char *Sys_GetFileExtension(const char *path)
 		p++;
 	}
 
-	if (extp == sep)
+	if (extp == sep || *(extp+1) == '\0')
 		extp = p;  // no extensions in path
 
 	return extp;
