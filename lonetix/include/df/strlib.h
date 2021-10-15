@@ -195,4 +195,25 @@ INLINE size_t Df_strpadr(char *s, char c, size_t n)
 	return i;
 }
 
+/**
+ * \brief Reverse string in place.
+ *
+ * \return String length.
+ */
+INLINE size_t Df_strrev(char *s)
+{
+	EXTERNC size_t strlen(const char *);
+
+	size_t n = strlen(s);
+	char  *e = s + n - 1;
+	while (e > s) {
+		char c = *s;
+
+		*s++ = *e;
+		*e-- =  c;
+	}
+
+	return n;
+}
+
 #endif
