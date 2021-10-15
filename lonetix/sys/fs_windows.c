@@ -30,7 +30,7 @@ static THREAD_LOCAL Pathbuf pathbuf;
 
 static wchar_t *Sys_Utf8PathToW(const char *path)
 {
-	int n = MultiByteToWideChar(CP_UTF8, 0, dir, -1, pathbuf.wstr, ARRAY_SIZE(pathbuf.wstr));
+	int n = MultiByteToWideChar(CP_UTF8, 0, path, -1, pathbuf.wstr, ARRAY_SIZE(pathbuf.wstr));
 	if (n < 0) {
 		Sys_SetErrStat(GetLastError(), "MultiByteToWideChar() failed");
 		return NULL;
@@ -65,7 +65,7 @@ void Sys_Fclose(Fildes fd)
 	CloseHandle(fd);
 }
 
-typedef struct FileList dfFileList;
+typedef struct FileList FileList;
 struct FileList {
 	FileList *next;
 	unsigned    len;
@@ -127,13 +127,14 @@ char **Sys_ListFiles(const char *dir, unsigned *nfiles, const char *pat)
 		Sys_SetErrStat(errno, "_wfindfirst()/_wfindnext()");
 		goto fail;
 	}
-	_findclose(findhn);
 
 	char **files = (char **) malloc(sizeof(*files) * (count + 1) + nchars);
 	if (!files) {
 		Sys_OutOfMemory();
-		return NULL;
+		goto fail;
 	}
+
+	_findclose(findhn);  // safe, can't fail anymore
 
 	char *namep = (char *) (files + count + 1);
 	for (unsigned i = 0; i < count; i++) {
