@@ -316,8 +316,10 @@ static void Bgpgrep_OpenMrtDump(const char *filename)
 	S.filename = filename;
 	if (strcmp(S.filename, "-") == 0) {
 		// Direct read from stdin - assume uncompressed.
-		S.inf    = STM_FILDES(CON_FILDES(STDIN));
-		S.infOps = Stm_NcFildesOps;
+		Bufio_RdInit(&S.infBuf, STM_FILDES(CON_FILDES(STDIN)), Stm_NcFildesOps);
+
+		S.inf    = &S.infBuf;
+		S.infOps = Stm_NcRdBufOps;
 		return;
 	}
 
@@ -352,8 +354,10 @@ static void Bgpgrep_OpenMrtDump(const char *filename)
 
 	} else {
 		// Assume uncompressed file
-		S.inf    = STM_FILDES(fh);
-		S.infOps = Stm_FildesOps;
+		Bufio_RdInit(&S.infBuf, STM_FILDES(fh), Stm_FildesOps);
+
+		S.inf    = &S.infBuf;
+		S.infOps = Stm_RdBufOps;
 	}
 }
 

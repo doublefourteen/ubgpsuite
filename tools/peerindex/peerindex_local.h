@@ -13,6 +13,7 @@
 #define DF_PEERINDEX_LOCAL_H_
 
 #include "bgp/mrt.h"
+#include "bufio.h"
 
 #include <setjmp.h>
 
@@ -39,6 +40,7 @@ typedef struct {
 	const char   *filename;
 	void         *inf;
 	const StmOps *infOps;
+	Stmrdbuf      infBuf;
 
 	// Miscellaneous global flags and data
 	Boolean8    hasPeerIndex;

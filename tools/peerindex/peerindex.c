@@ -226,8 +226,10 @@ static void Peerindex_OpenMrtDump(const char *filename)
 	S.filename = filename;
 	if (strcmp(S.filename, "-") == 0) {
 		// Direct read from stdin, assume uncompressed
-		S.inf    = STM_FILDES(CON_FILDES(STDIN));
-		S.infOps = Stm_NcFildesOps;
+		Bufio_RdInit(&S.infBuf, STM_FILDES(CON_FILDES(STDIN)), Stm_NcFildesOps);
+
+		S.inf    = &S.infBuf;
+		S.infOps = Stm_NcRdBufOps;
 		return;
 	}
 
@@ -262,8 +264,10 @@ static void Peerindex_OpenMrtDump(const char *filename)
 
 	} else {
 		// Assume uncompressed file
-		S.inf    = STM_FILDES(fh);
-		S.infOps = Stm_FildesOps;
+		Bufio_RdInit(&S.infBuf, STM_FILDES(fh), Stm_FildesOps);
+
+		S.inf    = &S.infBuf;
+		S.infOps = Stm_RdBufOps;
 	}
 }
 
@@ -288,7 +292,7 @@ static void Peerindex_MarkPeerRefs(void)
 static void Peerindex_FlushPeerIndexTable(void)
 {
 	char buf[IPV6_STRLEN + 1];
-	Stmbuf sb;
+	Stmwrbuf sb;
 
 	Ipadr adr;
 
@@ -300,7 +304,7 @@ static void Peerindex_FlushPeerIndexTable(void)
 
 	Uint16 idx = 0;
 
-	Bufio_Init(&sb, S.outf, S.outfOps);
+	Bufio_WrInit(&sb, S.outf, S.outfOps);
 
 	Bgp_StartMrtPeersv2(&it, &S.peerIndex);
 	while ((peer = Bgp_NextMrtPeerv2(&it)) != NULL) {

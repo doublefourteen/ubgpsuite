@@ -16,6 +16,7 @@
 #include "bgp/mrt.h"
 #include "bgp/patricia.h"
 #include "bgp/vm.h"
+#include "bufio.h"
 
 #include <setjmp.h>
 
@@ -113,6 +114,7 @@ struct BgpgrepState {
 	const char   *filename;  // current file being processed
 	void         *inf;       // NOTE: may be NULL even in a file is open
 	const StmOps *infOps;    // if NULL no file is open
+	Stmrdbuf      infBuf;    // input buffer in case we're reading from uncompressed source
 
 	// Miscellaneous global flags and data
 	Boolean8  noColor;

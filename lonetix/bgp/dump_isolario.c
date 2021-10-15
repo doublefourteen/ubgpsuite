@@ -159,7 +159,7 @@ static void NormalizeExtendedTimestamp(Dumpfmtctx *ctx)
 	ctx->microsecs %= 1000000;
 }
 
-static void DumpUnknown(Stmbuf *sb, BgpType type)
+static void DumpUnknown(Stmwrbuf *sb, BgpType type)
 {
 	Bufio_Putc(sb, UNKNOWN_MARKER);
 	Bufio_Putc(sb, SEP_CHAR);
@@ -167,7 +167,7 @@ static void DumpUnknown(Stmbuf *sb, BgpType type)
 	Bufio_Putsn(sb, SEPS_BUF, 8);
 }
 
-static Sint32 DumpCaps(Stmbuf *sb, Bgpcapiter *caps, const Dumpfmtctx *ctx)
+static Sint32 DumpCaps(Stmwrbuf *sb, Bgpcapiter *caps, const Dumpfmtctx *ctx)
 {
 	const char *s;
 	Bgpcap     *cap;
@@ -193,7 +193,7 @@ static Sint32 DumpCaps(Stmbuf *sb, Bgpcapiter *caps, const Dumpfmtctx *ctx)
 	return ncaps;
 }
 
-static Judgement DumpAttributes(Stmbuf           *sb,
+static Judgement DumpAttributes(Stmwrbuf         *sb,
                                 const Bgpattrseg *tpa,
                                 Bgpattrtab        table,
                                 const Dumpfmtctx *ctx)
@@ -402,7 +402,7 @@ static Judgement DumpAttributes(Stmbuf           *sb,
 	return OK;
 }
 
-static void DumpMrtInfoTrailer(Stmbuf *sb, const Dumpfmtctx *ctx)
+static void DumpMrtInfoTrailer(Stmwrbuf *sb, const Dumpfmtctx *ctx)
 {
 	char buf[128];
 
@@ -440,7 +440,7 @@ static void DumpMrtInfoTrailer(Stmbuf *sb, const Dumpfmtctx *ctx)
 	Bufio_Puts(sb, EOLN);
 }
 
-static void WarnCorrupted(Stmbuf *sb, const Dumpfmtctx *ctx)
+static void WarnCorrupted(Stmwrbuf *sb, const Dumpfmtctx *ctx)
 {
 	Bufio_Putc(sb, SEP_CHAR_BAD);
 	if (ctx->withColors)
@@ -452,7 +452,7 @@ static void WarnCorrupted(Stmbuf *sb, const Dumpfmtctx *ctx)
 }
 
 static Sint32 DumpRoutesFast(char              marker,
-                             Stmbuf           *sb,
+                             Stmwrbuf           *sb,
                              Bgpmpiter        *prefixes,
                              const Bgpattrseg *tpa,
                              Bgpattrtab        table,
@@ -519,7 +519,7 @@ static unsigned InsertRoute(Prefixtree **pr, Prefixtree *n)
 }
 
 static Sint32 DumpRouteWithPathId(char              marker,
-                                  Stmbuf           *sb,
+                                  Stmwrbuf         *sb,
                                   const Prefixtree *n,
                                   const Bgpattrseg *tpa,
                                   Bgpattrtab        table,
@@ -558,7 +558,7 @@ static Sint32 DumpRouteWithPathId(char              marker,
 }
 
 static Sint32 DumpRoutes(char              marker,
-                         Stmbuf           *sb,
+                         Stmwrbuf         *sb,
                          Bgpmpiter        *prefixes,
                          const Bgpattrseg *tpa,
                          Bgpattrtab        table,
@@ -614,7 +614,7 @@ static Sint32 DumpRoutes(char              marker,
 	return nprefixes;
 }
 
-static Judgement DumpBgp(Stmbuf        *sb,
+static Judgement DumpBgp(Stmwrbuf      *sb,
                          BgpType        type,
                          const void    *data,
                          size_t         nbytes,
@@ -720,7 +720,7 @@ static Sint64 Isolario_DumpMsg(const Bgphdr *hdr,
                                const StmOps *ops,
                                Bgpattrtab    table)
 {
-	Stmbuf sb;
+	Stmwrbuf sb;
 
 	size_t nbytes = beswap16(hdr->len);
 	assert(nbytes >= BGP_HDRSIZ);
@@ -731,7 +731,7 @@ static Sint64 Isolario_DumpMsg(const Bgphdr *hdr,
 	ctx.isAsn32bit = BGP_ISASN32BIT(flags);
 	ctx.isAddPath  = BGP_ISADDPATH(flags);
 
-	Bufio_Init(&sb, streamp, ops);
+	Bufio_WrInit(&sb, streamp, ops);
 	DumpBgp(&sb, hdr->type, hdr + 1, nbytes, table, &ctx);
 	return Bufio_Flush(&sb);
 }
@@ -742,7 +742,7 @@ static Sint64 Isolario_DumpMsgWc(const Bgphdr *hdr,
                                  const StmOps *ops,
                                  Bgpattrtab    table)
 {
-	Stmbuf sb;
+	Stmwrbuf sb;
 
 	size_t nbytes = beswap16(hdr->len);
 	assert(nbytes >= BGP_HDRSIZ);
@@ -754,7 +754,7 @@ static Sint64 Isolario_DumpMsgWc(const Bgphdr *hdr,
 	ctx.isAddPath  = BGP_ISADDPATH(flags);
 	ctx.withColors = TRUE;
 
-	Bufio_Init(&sb, streamp, ops);
+	Bufio_WrInit(&sb, streamp, ops);
 	DumpBgp(&sb, hdr->type, hdr + 1, nbytes, table, &ctx);
 
 	return Bufio_Flush(&sb);
@@ -770,12 +770,12 @@ static Sint64 Isolario_DumpRibv2(const Mrthdr       *hdr,
 	assert(hdr->type == MRT_TABLE_DUMPV2);
 	assert(TABLE_DUMPV2_ISRIB(hdr->subtype));
 
-	Stmbuf     sb;
+	Stmwrbuf   sb;
 	Dumpfmtctx ctx;
 	char       buf[APPFX_STRLEN + 1];
 	char      *ep;
 
-	Bufio_Init(&sb, streamp, ops);
+	Bufio_WrInit(&sb, streamp, ops);
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.hasPeer      = TRUE;
@@ -865,13 +865,13 @@ static Sint64 Isolario_DumpRib(const Mrthdr    *hdr,
 {
 	assert(hdr->type == MRT_TABLE_DUMP);
 
-	Stmbuf     sb;
+	Stmwrbuf   sb;
 	Dumpfmtctx ctx;
 	RawPrefix  pfx;
 	char       buf[APPFX_STRLEN + 1];
 	char      *ep;
 
-	Bufio_Init(&sb, streamp, ops);
+	Bufio_WrInit(&sb, streamp, ops);
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.hasPeer      = TRUE;
@@ -930,14 +930,14 @@ static Sint64 Isolario_DumpBgp4mp(const Mrthdr    *hdr,
 {
 	assert(hdr->type == MRT_BGP4MP || hdr->type == MRT_BGP4MP_ET);
 
-	Stmbuf     sb;
+	Stmwrbuf   sb;
 	Dumpfmtctx ctx;
 	size_t     offset;  // offset to BGP4MP payload
 	size_t     len;
 
 	const Bgp4mphdr *bgp4mp = BGP4MP_HDR(hdr);
 
-	Bufio_Init(&sb, streamp, ops);
+	Bufio_WrInit(&sb, streamp, ops);
 
 	len = beswap32(hdr->len);
 
@@ -1058,12 +1058,12 @@ static Sint64 Isolario_DumpZebra(const Mrthdr   *hdr,
 {
 	assert(hdr->type == MRT_BGP);
 
-	Stmbuf     sb;
+	Stmwrbuf   sb;
 	Dumpfmtctx ctx;
 
 	const Zebrahdr *zebra = ZEBRA_HDR(hdr);
 
-	Bufio_Init(&sb, streamp, ops);
+	Bufio_WrInit(&sb, streamp, ops);
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.hasPeer         = TRUE;

@@ -18,36 +18,91 @@
 #include <stdio.h>
 #include <string.h>
 
-Sint64 Bufio_Flush(Stmbuf *sb)
+static Judgement Bufio_FillRdBuf(Stmrdbuf *sb)
+{
+	assert(sb->pos == sb->availIn);
+
+	Sint64 n = sb->ops->Read(sb->streamp, sb->buf, sizeof(sb->buf));
+	if (n < 0) {
+		sb->hasError = TRUE;
+		return NG;
+	}
+
+	sb->isEof = (n == 0);
+
+	sb->availIn  = n;
+	sb->totalIn += n;
+	sb->pos      = 0;
+	return OK;
+}
+
+Sint64 Bufio_Read(Stmrdbuf *sb, void *buf, size_t nbytes)
+{
+	assert(sb->ops->Read);
+
+	if (sb->hasError)
+		return -1;  // refuse unless somebody clears error
+
+	Uint8 *dest = (Uint8 *) buf;
+	while (nbytes > 0) {
+		if (sb->pos >= sb->availIn) {
+			if (Bufio_FillRdBuf(sb) != OK) {
+				if (dest > (Uint8 *) buf)
+					break; // delay error to next read
+
+				return -1;
+			}
+			if (sb->isEof)
+				break;  // end of file
+		}
+
+		size_t size = MIN((size_t) (sb->availIn - sb->pos), nbytes);
+
+		memcpy(dest, sb->buf + sb->pos, size);
+		sb->pos += size;
+
+		nbytes -= size;
+		dest   += size;
+	}
+
+	return dest - (Uint8 *) buf;
+}
+
+void Bufio_Close(Stmrdbuf *sb)
+{
+	if (sb->ops->Close) sb->ops->Close(sb->streamp);
+}
+
+Sint64 Bufio_Flush(Stmwrbuf *sb)
 {
 	assert(sb->ops->Write);
 
-	while (sb->len > 0) {
-		Sint64 n = sb->ops->Write(sb->streamp, sb->buf, sb->len);
+	while (sb->availOut > 0) {
+		Sint64 n = sb->ops->Write(sb->streamp, sb->buf, sb->availOut);
 		if (n < 0)
-			return NG;
+			return -1;
 
-		memmove(sb->buf, sb->buf + n, sb->len - n);
-		sb->len   -= n;
-		sb->total += n;
+		memmove(sb->buf, sb->buf + n, sb->availOut - n);
+		sb->availOut -= n;
+		sb->totalOut += n;
 	}
 
-	return sb->total;
+	return sb->totalOut;
 }
 
-Sint64 _Bufio_Putsn(Stmbuf *sb, const char *s, size_t nbytes)
+Sint64 _Bufio_Putsn(Stmwrbuf *sb, const char *s, size_t nbytes)
 {
-	if (sb->len + nbytes > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
+	if (sb->availOut + nbytes > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
 		return -1;
 	if (nbytes > sizeof(sb->buf))
 		return sb->ops->Write(sb->streamp, sb, nbytes);
 
-	memcpy(sb->buf + sb->len, s, nbytes);
-	sb->len += nbytes;
+	memcpy(sb->buf + sb->availOut, s, nbytes);
+	sb->availOut += nbytes;
 	return nbytes;
 }
 
-Sint64 Bufio_Putu(Stmbuf *sb, unsigned long long val)
+Sint64 Bufio_Putu(Stmwrbuf *sb, unsigned long long val)
 {
 	char buf[DIGS(val) + 1];
 
@@ -55,7 +110,7 @@ Sint64 Bufio_Putu(Stmbuf *sb, unsigned long long val)
 	return Bufio_Putsn(sb, buf, eptr - buf);
 }
 
-Sint64 Bufio_Putx(Stmbuf *sb, unsigned long long val)
+Sint64 Bufio_Putx(Stmwrbuf *sb, unsigned long long val)
 {
 	char buf[XDIGS(val) + 1];
 
@@ -63,7 +118,7 @@ Sint64 Bufio_Putx(Stmbuf *sb, unsigned long long val)
 	return Bufio_Putsn(sb, buf, eptr - buf);
 }
 
-Sint64 Bufio_Puti(Stmbuf *sb, long long val)
+Sint64 Bufio_Puti(Stmwrbuf *sb, long long val)
 {
 	char buf[1 + DIGS(val) + 1];
 
@@ -71,7 +126,7 @@ Sint64 Bufio_Puti(Stmbuf *sb, long long val)
 	return Bufio_Putsn(sb, buf, eptr - buf);
 }
 
-Sint64 Bufio_Putf(Stmbuf *sb, double val)
+Sint64 Bufio_Putf(Stmwrbuf *sb, double val)
 {
 	char buf[DOUBLE_STRLEN + 1];
 
@@ -79,7 +134,7 @@ Sint64 Bufio_Putf(Stmbuf *sb, double val)
 	return Bufio_Putsn(sb, buf, eptr - buf);
 }
 
-Sint64 Bufio_Printf(Stmbuf *sb, const char *fmt, ...)
+Sint64 Bufio_Printf(Stmwrbuf *sb, const char *fmt, ...)
 {
 	va_list va;
 	Sint64  n;
@@ -91,7 +146,7 @@ Sint64 Bufio_Printf(Stmbuf *sb, const char *fmt, ...)
 	return n;
 }
 
-Sint64 Bufio_Vprintf(Stmbuf *sb, const char *fmt, va_list va)
+Sint64 Bufio_Vprintf(Stmwrbuf *sb, const char *fmt, va_list va)
 {
 	va_list vc;
 	char   *buf;
@@ -117,3 +172,39 @@ Sint64 Bufio_Vprintf(Stmbuf *sb, const char *fmt, va_list va)
 	return Bufio_Putsn(sb, buf, n2);
 }
 
+static Sint64 Bufio_StmRead(void *streamp, void *buf, size_t nbytes)
+{
+	return Bufio_Read((Stmrdbuf *) streamp, buf, nbytes);
+}
+
+static Sint64 Bufio_StmTell(void *streamp)
+{
+	Stmrdbuf *sb = (Stmrdbuf *) streamp;
+
+	return (sb->hasError) ? -1 : sb->totalIn + (Sint64) sb->pos;
+}
+
+static void Bufio_StmClose(void *streamp)
+{
+	Bufio_Close((Stmrdbuf *) streamp);
+}
+
+static const StmOps _Stm_RdBufOps = {
+	Bufio_StmRead,
+	NULL,
+	NULL,
+	Bufio_StmTell,
+	NULL,
+	Bufio_StmClose
+};
+static const StmOps _Stm_NcRdBufOps = {
+	Bufio_StmRead,
+	NULL,
+	NULL,
+	Bufio_StmTell,
+	NULL,
+	NULL
+};
+
+const StmOps *const Stm_RdBufOps   = &_Stm_RdBufOps;
+const StmOps *const Stm_NcRdBufOps = &_Stm_NcRdBufOps;

@@ -3,7 +3,7 @@
 /**
  * \file      bufio.h
  *
- * Buffered stream writing utilities.
+ * Buffered stream input/output utilities.
  *
  * \copyright The DoubleFourteen Code Forge (C) All Rights Reserved
  * \author    Lorenzo Cogotti
@@ -26,27 +26,81 @@
  * and reduce calls to a stream's `Write()` operation.
  */
 typedef struct {
-	Sint64        total;            ///< Total bytes flushed to output
-	Uint32        len;              ///< Bytes currently buffered
+	Sint64        totalOut;         ///< Total bytes flushed to output
+	Uint32        availOut;         ///< Bytes currently buffered
 	char          buf[STM_BUFSIZ];  ///< Output buffer
 	void         *streamp;          ///< Output stream pointer
 	const StmOps *ops;              ///< Output stream operations
-} Stmbuf;
+} Stmwrbuf;
+
+/**
+ * Buffered input helper structure.
+ *
+ * A small `struct` holding an input buffer.
+ * Reading variant of the `Stmwrbuf` structure.
+ *
+ * In contrast with `Stmwrbuf`, this struct may be used
+ * as a stream with `Stm_RdBufOps` and `Stm_NcRdBufOps`.
+ */
+typedef struct {
+	Sint64        totalIn;          ///< Total bytes read from input.
+	Uint16        availIn;          ///< Bytes currently buffered.
+	Uint16        pos;              ///< Offset inside buffer to next byte to be returned.
+	Boolean8      hasError;         ///< Whether a read error was encountered
+	Boolean8      isEof;            ///< Whether last Read() from input returned 0
+	char          buf[STM_BUFSIZ];  ///< Input buffer
+	void         *streamp;          ///< Input stream pointer
+	const StmOps *ops;              ///< Input stream operations
+} Stmrdbuf;
+
+/// Clear `Stmrdbuf` error flag, if set.
+FORCE_INLINE void BUFIO_CLRERROR(Stmrdbuf *sb)
+{
+	sb->hasError = FALSE;
+}
+
+/// Clear `Stmrdbuf` EOF flag, if set.
+FORCE_INLINE void BUFIO_CLREOF(Stmrdbuf *sb)
+{
+	sb->isEof = FALSE;
+}
+
+/**
+ * Initialize the buffer for reading from `streamp` using the
+ * `ops` stream operations.
+ *
+ * \param [out] sb      Buffer to be initialized, must not be `NULL`
+ * \param [in]  streamp Output stream pointer
+ * \param [in]  ops     Output stream operations, must not be `NULL`
+ *                      and must provide a `Read()` operation
+ */
+FORCE_INLINE void Bufio_RdInit(Stmrdbuf *sb, void *streamp, const StmOps *ops)
+{
+	sb->totalIn  = 0;
+	sb->availIn  = 0;
+	sb->hasError = FALSE;
+	sb->isEof    = FALSE;
+	sb->streamp  = streamp;
+	sb->ops      = ops;
+}
+
+Sint64 Bufio_Read(Stmrdbuf *sb, void *buf, size_t nbytes);
+void Bufio_Close(Stmrdbuf *sb);
 
 /**
  * Flush the buffer to output stream.
  *
  * \return On success returns the **total** bytes written to output
- *         stream since last call to `Bufio_Init()`,
- *         that is the value stored inside `sb->total` field after the flush
+ *         stream since last call to `Bufio_WrInit()`,
+ *         that is the value stored inside `sb->totalOut` field after the flush
  *         operations. Otherwise returns -1.
  *
  * \note Partial flushes are possible on partial writes, in which case
  *       some amount of data will remain buffered in `sb` and may be
- *       flushed later on; `sb->total` and `sb->len` will still be updated
+ *       flushed later on; `sb->totalOut` and `sb->len` will still be updated
  *       consistently.
  */
-Sint64 Bufio_Flush(Stmbuf *sb);
+Sint64 Bufio_Flush(Stmwrbuf *sb);
 
 /**
  * Initialize the buffer for writing to `streamp` using the
@@ -57,14 +111,14 @@ Sint64 Bufio_Flush(Stmbuf *sb);
  * \param [in]  ops     Output stream operations, must not be `NULL`
  *                      and must provide a `Write()` operation
  */
-FORCE_INLINE void Bufio_Init(Stmbuf       *sb,
-                             void         *streamp,
-                             const StmOps *ops)
+FORCE_INLINE void Bufio_WrInit(Stmwrbuf     *sb,
+                               void         *streamp,
+                               const StmOps *ops)
 {
-	sb->total   = 0;
-	sb->len     = 0;
-	sb->streamp = streamp;
-	sb->ops     = ops;
+	sb->totalOut = 0;
+	sb->availOut = 0;
+	sb->streamp  = streamp;
+	sb->ops      = ops;
 }
 
 /**
@@ -77,16 +131,16 @@ FORCE_INLINE void Bufio_Init(Stmbuf       *sb,
  *         -1 on error.
  *
  * @{
- *   \fn Sint64 Bufio_Putu(Stmbuf *, unsigned long long)
- *   \fn Sint64 Bufio_Putx(Stmbuf *, unsigned long long)
- *   \fn Sint64 Bufio_Puti(Stmbuf *, long long)
- *   \fn Sint64 Bufio_Putf(Stmbuf *, double)
+ *   \fn Sint64 Bufio_Putu(Stmwrbuf *, unsigned long long)
+ *   \fn Sint64 Bufio_Putx(Stmwrbuf *, unsigned long long)
+ *   \fn Sint64 Bufio_Puti(Stmwrbuf *, long long)
+ *   \fn Sint64 Bufio_Putf(Stmwrbuf *, double)
  * @}
  */
-Sint64 Bufio_Putu(Stmbuf *sb, unsigned long long val);
-Sint64 Bufio_Putx(Stmbuf *sb, unsigned long long val);
-Sint64 Bufio_Puti(Stmbuf *sb, long long val);
-Sint64 Bufio_Putf(Stmbuf *sb, double val);
+Sint64 Bufio_Putu(Stmwrbuf *sb, unsigned long long val);
+Sint64 Bufio_Putx(Stmwrbuf *sb, unsigned long long val);
+Sint64 Bufio_Puti(Stmwrbuf *sb, long long val);
+Sint64 Bufio_Putf(Stmwrbuf *sb, double val);
 
 /**
  * Write a single character to `sb`.
@@ -96,12 +150,12 @@ Sint64 Bufio_Putf(Stmbuf *sb, double val);
  *
  * \note `\0` may be written and buffered like any other `char`.
  */
-FORCE_INLINE Sint64 Bufio_Putc(Stmbuf *sb, char c)
+FORCE_INLINE Sint64 Bufio_Putc(Stmwrbuf *sb, char c)
 {
-	if (sb->len == sizeof(sb->buf) && Bufio_Flush(sb) == -1)
+	if (sb->availOut == sizeof(sb->buf) && Bufio_Flush(sb) == -1)
 		return -1;
 
-	sb->buf[sb->len++] = c;
+	sb->buf[sb->availOut++] = c;
 	return 1;
 }
 
@@ -117,7 +171,7 @@ FORCE_INLINE Sint64 Bufio_Putc(Stmbuf *sb, char c)
  * \return Number of bytes written to `sb` on success (equal to
  *         `nbytes`), -1 on error.
  */
-Sint64 _Bufio_Putsn(Stmbuf *, const char *, size_t);
+Sint64 _Bufio_Putsn(Stmwrbuf *, const char *, size_t);
 
 #ifdef __GNUC__
 // Optimize to call Bufio_Putc() if 'nbytes' is statically known to be 1
@@ -137,7 +191,7 @@ Sint64 _Bufio_Putsn(Stmbuf *, const char *, size_t);
  * \return Number of bytes written to `sb` on success (equal
  *         to string length), -1 on error.
  */
-FORCE_INLINE Sint64 Bufio_Puts(Stmbuf *sb, const char *s)
+FORCE_INLINE Sint64 Bufio_Puts(Stmwrbuf *sb, const char *s)
 {
 	EXTERNC size_t strlen(const char *); // avoids #include
 
@@ -152,11 +206,14 @@ FORCE_INLINE Sint64 Bufio_Puts(Stmbuf *sb, const char *s)
  * \return Number of bytes written to `sb` on success, -1 on error.
  *
  * @{
- *   \fn Sint64 Bufio_Printf(Stmbuf *, const char *, ...)
- *   \fn Sint64 Bufio_Vprintf(Stmbuf *, const char *, va_list)
+ *   \fn Sint64 Bufio_Printf(Stmwrbuf *, const char *, ...)
+ *   \fn Sint64 Bufio_Vprintf(Stmwrbuf *, const char *, va_list)
  * @}
  */
-CHECK_PRINTF(2, 3) Sint64 Bufio_Printf(Stmbuf *, const char *, ...);
-CHECK_PRINTF(2, 0) Sint64 Bufio_Vprintf(Stmbuf *, const char *, va_list);
+CHECK_PRINTF(2, 3) Sint64 Bufio_Printf(Stmwrbuf *, const char *, ...);
+CHECK_PRINTF(2, 0) Sint64 Bufio_Vprintf(Stmwrbuf *, const char *, va_list);
+
+extern const StmOps *const Stm_RdBufOps;
+extern const StmOps *const Stm_NcRdBufOps;
 
 #endif
