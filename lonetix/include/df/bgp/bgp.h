@@ -559,6 +559,23 @@ typedef ALIGNED(1, struct) {
 	Uint8  attrs[FLEX_ARRAY];
 } Bgpattrseg;
 
+FORCE_INLINE Bgpwithdrawnseg *BGP_WITHDRAWN(const Bgpupdate *msg)
+{
+	return (Bgpwithdrawnseg *) msg->data;
+}
+
+FORCE_INLINE Bgpattrseg *BGP_ATTRIBUTES(const Bgpupdate *msg)
+{
+	const Bgpwithdrawnseg *w = BGP_WITHDRAWN(msg);
+	return (Bgpattrseg *) (w->nlri + BE16(w->len));
+}
+
+FORCE_INLINE void *BGP_ANNOUNCEMENTS(const Bgpupdate *msg)
+{
+	const Bgpattrseg *tpa = BGP_ATTRIBUTES(msg);
+	return (void *) (tpa->attrs + BE16(tpa->len));
+}
+
 // NOTE: NLRI segment is handled with no struct
 
 /// Attribute length has an additional byte.
