@@ -266,9 +266,9 @@ typedef uintptr_t Uintptr;  ///< Fixed-size unsigned type large enough to store 
 #define ALIGN_DOWN(x, align) \
 	ALIGN((x) - ((align) - 1), align)
 #define ALIGN_PTR(p, align) \
-	((void *) ALIGN((uintptr_t) (p), align))
+	((void *) ALIGN((Uintptr) (p), align))
 #define ALIGN_PTR_DOWN(p, align) \
-	((void *) ALIGN_DOWN((uintptr_t) (p), align))
+	((void *) ALIGN_DOWN((Uintptr) (p), align))
 
 #define IS_ALIGNED(x, align)     (((x) & ((align) - 1)) == 0)
 #define IS_PTR_ALIGNED(p, align) IS_ALIGNED((Uintptr) p, align)
