@@ -547,13 +547,15 @@ Bgpattr *Bgp_GetRealAggregator(const Bgpattrseg *tpa,
 		if (Bgp_GetErrStat(NULL))
 			return NULL;  // forward error
 
-		if (!BGP_CHKAGGRSIZ(attr4, TRUE)) {
-			Bgp_SetErrStat(BGPEBADAGGR4);
-			return NULL;
-		}
+		if (attr4) {
+			if (!BGP_CHKAGGRSIZ(attr4, TRUE)) {
+				Bgp_SetErrStat(BGPEBADAGGR4);
+				return NULL;
+			}
 
-		attr     = attr4;
-		asn32bit = TRUE;
+			attr     = attr4;
+			asn32bit = TRUE;
+		}
 	}
 
 	*isAsn32bit = asn32bit;
