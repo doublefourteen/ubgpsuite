@@ -17,6 +17,7 @@
 #include "sys/con.h"
 #include "argv.h"
 #include "numlib.h"
+#include "smallbytecopy.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -454,7 +455,7 @@ Prefix *Bgp_NextMpPrefix(Bgpmpiter *it)
 		cur->isAddPath = TRUE;
 		cur->pathId    = pfx->pathId;
 		cur->width     = pfx->width;
-		memcpy(cur->bytes, pfx->bytes, PFXLEN(pfx->width));
+		_smallbytecopy16(cur->bytes, pfx->bytes, PFXLEN(pfx->width));
 	} else {
 		// Regular prefix
 		const RawPrefix *pfx = (const RawPrefix *) rawPfx;
@@ -462,7 +463,7 @@ Prefix *Bgp_NextMpPrefix(Bgpmpiter *it)
 		cur->isAddPath = FALSE;
 		cur->pathId    = 0;
 		cur->width     = pfx->width;
-		memcpy(cur->bytes, pfx->bytes, PFXLEN(pfx->width));
+		_smallbytecopy16(cur->bytes, pfx->bytes, PFXLEN(pfx->width));
 	}
 
 	return cur;

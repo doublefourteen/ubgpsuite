@@ -13,6 +13,7 @@
 #include "sys/endian.h"
 #include "sys/ip.h"
 #include "numlib.h"
+#include "smallbytecopy.h"
 
 #include <assert.h>
 #include <string.h>
@@ -41,13 +42,13 @@ char *Bgp_PrefixToString(Afi afi, const RawPrefix *prefix, char *dest)
 	switch (afi) {
 	case AFI_IP:
 		memset(&adr, 0, sizeof(adr));
-		memcpy(&adr, prefix->bytes, PFXLEN(prefix->width));
+		_smallbytecopy4(adr.bytes, prefix->bytes, PFXLEN(prefix->width));
 		dest = Ipv4_AdrToString(&adr, dest);
 		break;
 
 	case AFI_IP6:
 		memset(&adr6, 0, sizeof(adr6));
-		memcpy(&adr6, prefix->bytes, PFXLEN(prefix->width));
+		_smallbytecopy16(adr6.bytes, prefix->bytes, PFXLEN(prefix->width));
 		dest = Ipv6_AdrToString(&adr6, dest);
 		break;
 
@@ -122,7 +123,7 @@ Judgement Bgp_StringToPrefix(const char *s, Prefix *dest)
 
 	dest->isAddPath = FALSE;
 	dest->width     = width;
-	memcpy(dest->bytes, adr.bytes, PFXLEN(width));
+	_smallbytecopy16(dest->bytes, adr.bytes, PFXLEN(width));
 	return OK;
 }
 
