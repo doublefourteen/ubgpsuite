@@ -12,6 +12,7 @@
 #include "sys/sys_local.h"  // for Sys_SetErrStat() - vsnprintf()
 #include "bufio.h"
 #include "numlib.h"
+#include "smallbytecopy.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -73,7 +74,7 @@ void Bufio_Close(Stmrdbuf *sb)
 	if (sb->ops->Close) sb->ops->Close(sb->streamp);
 }
 
-Sint64 Bufio_Flush(Stmwrbuf *sb)
+NOINLINE Sint64 Bufio_Flush(Stmwrbuf *sb)
 {
 	assert(sb->ops->Write);
 
@@ -90,6 +91,16 @@ Sint64 Bufio_Flush(Stmwrbuf *sb)
 	return sb->totalOut;
 }
 
+Sint64 _Bufio_SmallPutsn(Stmwrbuf *sb, const char *s, size_t nbytes)
+{
+	if (sb->availOut + nbytes > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
+		return -1;
+
+	_smallbytecopy64(sb->buf + sb->availOut, s, nbytes);
+	sb->availOut += nbytes;
+	return nbytes;
+}
+
 Sint64 _Bufio_Putsn(Stmwrbuf *sb, const char *s, size_t nbytes)
 {
 	if (sb->availOut + nbytes > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
@@ -104,26 +115,41 @@ Sint64 _Bufio_Putsn(Stmwrbuf *sb, const char *s, size_t nbytes)
 
 Sint64 Bufio_Putu(Stmwrbuf *sb, unsigned long long val)
 {
-	char buf[DIGS(val) + 1];
+	if (sb->availOut + DIGS(val) + 1 > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
+		return -1;
 
-	char *eptr = Utoa(val, buf);
-	return Bufio_Putsn(sb, buf, eptr - buf);
+	char *sptr = sb->buf + sb->availOut;
+	char *eptr = Utoa(val, sptr);
+	Sint64   n = eptr - sptr;
+
+	sb->availOut += n;
+	return n;
 }
 
 Sint64 Bufio_Putx(Stmwrbuf *sb, unsigned long long val)
 {
-	char buf[XDIGS(val) + 1];
+	if (sb->availOut + XDIGS(val) + 1 > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
+		return -1;
 
-	char *eptr = Xtoa(val, buf);
-	return Bufio_Putsn(sb, buf, eptr - buf);
+	char *sptr = sb->buf + sb->availOut;
+	char *eptr = Xtoa(val, sptr);
+	Sint64   n = eptr - sptr;
+
+	sb->availOut += n;
+	return n;
 }
 
 Sint64 Bufio_Puti(Stmwrbuf *sb, long long val)
 {
-	char buf[1 + DIGS(val) + 1];
+	if (sb->availOut + 1 + DIGS(val) + 1 > sizeof(sb->buf) && Bufio_Flush(sb) == -1)
+		return -1;
 
-	char *eptr = Itoa(val, buf);
-	return Bufio_Putsn(sb, buf, eptr - buf);
+	char *sptr = sb->buf + sb->availOut;
+	char *eptr = Itoa(val, sptr);
+	Sint64   n = eptr - sptr;
+
+	sb->availOut += n;
+	return n;
 }
 
 Sint64 Bufio_Putf(Stmwrbuf *sb, double val)

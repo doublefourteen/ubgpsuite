@@ -172,14 +172,16 @@ FORCE_INLINE Sint64 Bufio_Putc(Stmwrbuf *sb, char c)
  *         `nbytes`), -1 on error.
  */
 Sint64 _Bufio_Putsn(Stmwrbuf *, const char *, size_t);
+Sint64 _Bufio_SmallPutsn(Stmwrbuf *, const char *, size_t);
 
 #ifdef __GNUC__
 // Optimize to call Bufio_Putc() if 'nbytes' is statically known to be 1
 // NOTE: Avoids needless EOLN overhead on Unix
-#define Bufio_Putsn(sb, s, nbytes) ( \
-	(__builtin_constant_p(nbytes) && (nbytes) == 1) ? \
-	    Bufio_Putc(sb, (s)[0]) :                      \
-	    _Bufio_Putsn(sb, s, nbytes)                   \
+#define Bufio_Putsn(sb, s, nbytes) (                       \
+	(__builtin_constant_p(nbytes) && (nbytes) <= 64) ?     \
+	(((nbytes) == 1) ? Bufio_Putc(sb, (s)[0])              \
+	:                 _Bufio_SmallPutsn(sb, s, nbytes))    \
+	:                 _Bufio_Putsn(sb, s, nbytes)          \
 )
 #else
 #define Bufio_Putsn(sb, s, nbytes) _Bufio_Putsn(sb, s, nbytes)
