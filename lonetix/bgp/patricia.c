@@ -11,6 +11,7 @@
 
 #include "bgp/patricia.h"
 #include "sys/sys.h"  // for Sys_OutOfMemory()
+#include "smallbytecopy.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -151,7 +152,7 @@ RawPrefix *Pat_Insert(Patricia *trie, const RawPrefix *pfx)
 		if (!n)
 			return NULL;
 
-		memcpy(n->bytes, pfx->bytes, PFXLEN(pfx->width));
+		_smallbytecopy16(n->bytes, pfx->bytes, PFXLEN(pfx->width));
 
 		// Place it in `trie`
 		trie->head = n;
@@ -232,7 +233,7 @@ RawPrefix *Pat_Insert(Patricia *trie, const RawPrefix *pfx)
 		if (Pat_IsNodeGlue(n)) {
 			// Replace glue node
 			Pat_ResetNodeGlue(n);
-			memcpy(n->bytes, pfx->bytes, PFXLEN(pfx->width));
+			_smallbytecopy16(n->bytes, pfx->bytes, PFXLEN(pfx->width));
 		}
 
 		trie->nprefixes++;
@@ -244,7 +245,7 @@ RawPrefix *Pat_Insert(Patricia *trie, const RawPrefix *pfx)
 	if (!newNode)
 		return NULL;  // out of memory
 
-	memcpy(newNode->bytes, pfx->bytes, PFXLEN(pfx->width));
+	_smallbytecopy16(newNode->bytes, pfx->bytes, PFXLEN(pfx->width));
 	trie->nprefixes++;
 
 	if (n->width == differBit) {
