@@ -47,6 +47,8 @@
  * by any VM and is always discarded by `Bgp_VmStoreMatch()`.
  */
 static Bgpvmmatch discardMatch;
+// Used for empty programs
+static const Bgpvmbytec emptyProg = BGP_VMOP_END;
 
 Judgement Bgp_InitVm(Bgpvm *vm, size_t heapSiz)
 {
@@ -64,6 +66,7 @@ Judgement Bgp_InitVm(Bgpvm *vm, size_t heapSiz)
 	vm->heap      = heap;
 	vm->hMemSiz   = siz;
 	vm->hHighMark = siz;
+	vm->prog      = (Bgpvmbytec *) &emptyProg;
 	return Bgp_SetErrStat(BGPENOERR);
 }
 
@@ -76,8 +79,12 @@ Judgement Bgp_VmEmit(Bgpvm *vm, Bgpvmbytec bytec)
 
 	if (vm->progLen + 1 >= vm->progCap) {
 		// Grow the VM program segment
+		Bgpvmbytec *oldProg = vm->prog;
+		if (vm->prog == &emptyProg)
+			oldProg = NULL;
+
 		size_t      newSiz  = vm->progCap + BGP_VM_GROWPROGN;
-		Bgpvmbytec *newProg = (Bgpvmbytec *) realloc(vm->prog, newSiz * sizeof(*newProg));
+		Bgpvmbytec *newProg = (Bgpvmbytec *) realloc(oldProg, newSiz * sizeof(*newProg));
 		if (!newProg) {
 			// Flag the VM as bad
 			vm->setupFailed = TRUE;
@@ -157,7 +164,7 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 	}
 
 	// Setup initial VM state
-	Boolean result = TRUE;  // assume PASS unless CFAIL says otherwise
+	Boolean result = TRUE;  // assume pass unless found otherwise
 
 	vm->pc        = 0;
 	vm->si        = 0;
@@ -217,20 +224,29 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 			break;
 		EXECUTE(NOT):
 			Bgp_VmDoNot(vm);
-
-			EXPECT(CFAIL, ir, vm);
-			EXPECT(CPASS, ir, vm);
 			break;
 		EXECUTE(CFAIL):
-			if (Bgp_VmDoCfail(vm)) {
-				result = FALSE;  // immediate terminate on FAIL
+			if (!Bgp_VmDoBreakPoint(vm, /*breakIf=*/TRUE, /*onBreak=*/FALSE)) {
+				result = FALSE;  // immediate failure
 				goto terminate;
 			}
 
 			break;
 		EXECUTE(CPASS):
-			if (Bgp_VmDoCpass(vm))
-				goto terminate;  // immediate PASS
+			if (!Bgp_VmDoBreakPoint(vm, /*breakIf=*/TRUE, /*onBreak=*/TRUE))
+				goto terminate;  // immediate pass
+
+			break;
+		EXECUTE(ORFAIL):
+			if (!Bgp_VmDoBreakPoint(vm, /*breakIf=*/FALSE, /*onBreak=*/FALSE)) {
+				result = FALSE;  // immediate failure
+				goto terminate;
+			}
+
+			break;
+		EXECUTE(ORPASS):
+			if (!Bgp_VmDoBreakPoint(vm, /*breakIf=*/FALSE, /*onBreak=*/TRUE))
+				goto terminate;  // immediate pass
 
 			break;
 		EXECUTE(JZ):
@@ -243,9 +259,9 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 				if (vm->pc > vm->progLen) UNLIKELY
 					vm->errCode = BGPEVMBADJMP;  // jump target out of bounds
 
-			} else
+			} else {
 				BGP_VMPOP(vm);  // no jump, pop the stack and move on
-
+			}
 			break;
 		EXECUTE(JNZ):
 			if (!BGP_VMCHKSTKSIZ(vm, 1)) UNLIKELY
@@ -257,9 +273,9 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 				if (vm->pc > vm->progLen) UNLIKELY
 					vm->errCode = BGPEVMBADJMP;  // jump target out of bounds
 
-			} else
+			} else {
 				BGP_VMPOP(vm);  // no jump, pop the stack and move on
-
+			}
 			break;
 		EXECUTE(CHKT):
 			Bgp_VmDoChkt(vm, (BgpType) BGP_VMOPARG(ir));
@@ -281,9 +297,6 @@ Boolean Bgp_VmExec(Bgpvm *vm, Bgpmsg *msg)
 			break;
 		EXECUTE(ASMTCH):
 			Bgp_VmDoAsmtch(vm);
-			break;
-		EXECUTE(FASMTC):
-			Bgp_VmDoFasmtc(vm);
 			break;
 		EXECUTE(COMTCH):
 			Bgp_VmDoComtch(vm);
@@ -348,86 +361,43 @@ void Bgp_VmStoreMatch(Bgpvm *vm)
 	vm->nmatches++;
 }
 
-Boolean Bgp_VmDoCpass(Bgpvm *vm)
+Boolean Bgp_VmDoBreakPoint(Bgpvm *vm,
+                           Boolean breakIf,
+                           Boolean onBreak)
 {
 	/* POPS:
 	 * -1: Last operation Boolean result (as a Sint64, 0 for FALSE)
 	 *
 	 * PUSHES:
-	 * * On PASS result:
-	 *   - TRUE
+	 * * On break result:
+	 *   - `onBreak`
 	 * * Otherwise:
 	 *   - Nothing.
 	 *
 	 * SIDE-EFFECTS:
-	 * - Breaks current BLK on PASS
+	 * - Breaks current BLK if condition is met
 	 * - Updates `curMatch->isPassing` flag accordingly
 	 */
 
 	if (!BGP_VMCHKSTKSIZ(vm, 1)) UNLIKELY
-		return FALSE;  // error, let vm->errCode handle this
+		return TRUE;  // error, let vm->errCode handle this
 
-	Boolean shouldTerm = FALSE;  // unless proven otherwise
+	Boolean res = TRUE;  // unless we're out of blocks
 
-	// If stack top is non-zero we FAIL
-	if (BGP_VMPEEK(vm, -1)) {
-		// Leave TRUE on stack and break current BLK, this is a PASS
-		vm->curMatch->isPassing = TRUE;
-
-		if (vm->nblk > 0)
-			Bgp_VmDoBreak(vm);
-		else
-			shouldTerm = TRUE;  // no more BLK
-
-	} else {
-		// Pop the stack and move on, no PASS
-		vm->curMatch->isPassing = FALSE;
-		BGP_VMPOP(vm);
-	}
-
-	// Current match information has been collected,
-	// discard anything up to the next relevant operation
-	vm->curMatch = &discardMatch;
-
-	return shouldTerm;
-}
-
-Boolean Bgp_VmDoCfail(Bgpvm *vm)
-{
-	/* POPS:
-	 * -1: Last operation Boolean result (as a Sint64, 0 for FALSE)
-	 *
-	 * PUSHES:
-	 * * On FAIL result:
-	 *   - FALSE
-	 * * Otherwise:
-	 *   - Nothing.
-	 *
-	 * SIDE-EFFECTS:
-	 * - Breaks current BLK on FAIL
-	 * - Updates `curMatch->isPassing` flag accordingly
-	 */
-
-	if (!BGP_VMCHKSTKSIZ(vm, 1)) UNLIKELY
-		return FALSE;  // error, let vm->errCode handle this
-
-	Boolean shouldTerm = FALSE;  // unless proven otherwise
-
-	// If stack top is non-zero we FAIL
 	Bgpvmval *v = BGP_VMSTKGET(vm, -1);
-	if (v->val) {
-		// Push FALSE and break current BLK, this is a FAIL
-		vm->curMatch->isPassing = FALSE;
+	if (!!(v->val) == breakIf) {
+		// Push `onBreak` and break current BLK
+		vm->curMatch->isPassing = onBreak;
 
-		v->val = FALSE;
+		v->val = onBreak;
 		if (vm->nblk > 0)
 			Bgp_VmDoBreak(vm);
 		else
-			shouldTerm = TRUE;  // no more BLK
+			res = FALSE;  // no more BLK
 
 	} else {
-		// Pop the stack and move on, no FAIL
-		vm->curMatch->isPassing = TRUE;
+		// Pop the stack and move on, no break
+		vm->curMatch->isPassing = !onBreak;
 		BGP_VMPOP(vm);
 	}
 
@@ -435,7 +405,7 @@ Boolean Bgp_VmDoCfail(Bgpvm *vm)
 	// discard anything up to the next relevant operation
 	vm->curMatch = &discardMatch;
 
-	return shouldTerm;
+	return res;
 }
 
 void Bgp_VmDoChkt(Bgpvm *vm, BgpType type)
@@ -813,5 +783,6 @@ void Bgp_ResetVm(Bgpvm *vm)
 void Bgp_ClearVm(Bgpvm *vm)
 {
 	free(vm->heap);
-	free(vm->prog);
+	if (vm->prog != &emptyProg)
+		free(vm->prog);
 }

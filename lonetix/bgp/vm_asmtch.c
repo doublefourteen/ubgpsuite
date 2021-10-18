@@ -743,65 +743,6 @@ void *Bgp_VmCompileAsMatch(Bgpvm *vm, const Asn *expression, size_t n)
 void Bgp_VmDoAsmtch(Bgpvm *vm)
 {
 	/* POPS:
-	 * -1: Asn match array length
-	 * -2: Address to Asn match array
-	 *
-	 * PUSHES:
-	 * TRUE on successful match, FALSE otherwise
-	 */
-
-	Nfacomp  nc;
-	Nfa      nfa;
-	Nfainst *buf, *prog;
-
-	if (!BGP_VMCHKSTK(vm, 2))
-		return;
-
-	// Pop arguments from stack
-	Sint64     n     = BGP_VMPOP(vm);
-	const Asn *match = (const Asn *) BGP_VMPOPA(vm);
-	if (n <= 0 || match == NULL) {
-		vm->errCode = BGPEVMBADASMTCH;
-		return;
-	}
-	if (!BGP_VMCHKMSGTYPE(vm, BGP_UPDATE)) {
-		Bgp_VmStoreMsgTypeMatch(vm, /*isMatching=*/FALSE);
-		return;
-	}
-
-	// Compile on the fly on temporary memory
-	const size_t maxsiz = 6 * n * sizeof(*buf);
-
-	buf = (Nfainst *) Bgp_VmTempAlloc(vm, maxsiz);
-	if (!buf)
-		return;
-
-	compinit(&nc, buf);
-
-	int err;     // compilation status
-	if ((err = setjmp(nc.oops)) != 0) {
-		vm->errCode = err;
-		return;
-	}
-
-	prog = compile(&nc, match, n);
-#ifdef DF_DEBUG_ASMTCH
-	dumpprog(prog);
-#endif
-
-	BgpvmRet status = execute(vm, prog, LISTSIZ, &nfa);
-	if (status == BGPEVMASMTCHESIZE)
-		status = execute(vm, prog, BIGLISTSIZ, &nfa);
-
-	Bgp_VmTempFree(vm, maxsiz);
-
-	if (status == BGPENOERR)
-		collect(vm, &nfa);
-}
-
-void Bgp_VmDoFasmtc(Bgpvm *vm)
-{
-	/* POPS:
 	 * -1: Precompiled NFA instructions
 	 *
 	 * PUSHES:

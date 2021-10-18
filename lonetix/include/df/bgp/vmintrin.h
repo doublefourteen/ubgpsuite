@@ -201,10 +201,11 @@ FORCE_INLINE void Bgp_VmDoCall(Bgpvm *vm, Uint8 idx)
 	if (fn) fn(vm);
 }
 
-/// Implement `CPASS` (Conditional `PASS` if `TRUE`).
-Boolean Bgp_VmDoCpass(Bgpvm *vm);
-/// Implement `CFAIL` (Conditional `FAIL` if `TRUE`).
-Boolean Bgp_VmDoCfail(Bgpvm *vm);
+/**
+ * \brief Implement `CPASS`, `CFAIL`, `ORPASS`, `ORFAIL`, depending
+ *        on break condition and value.
+ */
+Boolean Bgp_VmDoBreakPoint(Bgpvm *vm, Boolean breakIf, Boolean onBreak);
 
 /// Implement `TAG` instruction with argument `tag`.
 FORCE_INLINE void Bgp_VmDoTag(Bgpvm *vm, Uint8 tag)
@@ -242,7 +243,6 @@ void Bgp_VmDoSubn(Bgpvm *vm, Uint8 arg);
 void Bgp_VmDoRelt(Bgpvm *vm, Uint8 arg);
 
 void Bgp_VmDoAsmtch(Bgpvm *vm);
-void Bgp_VmDoFasmtc(Bgpvm *vm);
 
 void Bgp_VmDoComtch(Bgpvm *vm);
 void Bgp_VmDoAcomtc(Bgpvm *vm);

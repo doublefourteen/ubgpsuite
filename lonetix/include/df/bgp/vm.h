@@ -75,26 +75,40 @@ FORCE_INLINE Uint8 BGP_VMOPARG(Bgpvmbytec bytec)
 #define BGP_VMOP_TAG    U8_C(8)
 /// NOT - Boolean negate the topmost stack element
 #define BGP_VMOP_NOT    U8_C(9)
-/// CONDITIONAL FAIL If TRUE - Fail the current matching `BLK` if topmost stack element is non-zero
+/// CONDITIONAL FAIL If TRUE - Fail current match `BLK` if topmost stack element is non-zero
 #define BGP_VMOP_CFAIL  U8_C(10)
-/// CONDITIONAL PASS If TRUE - Pass the current matching `BLK` if topmost stack element is non-zero
+/// CONDITIONAL PASS If TRUE - Pass current match `BLK` if topmost stack element is non-zero
 #define BGP_VMOP_CPASS  U8_C(11)
+/// FAIL IF FALSE - Fail current match `BLK` if topmost stack element is zero
+#define BGP_VMOP_ORFAIL U8_C(12)
+/// PASS IF FALSE - Pass current match `BLK` if topmost stack element is zero
+#define BGP_VMOP_ORPASS U8_C(13)
+
+FORCE_INLINE Boolean BGP_ISVMOPBREAKING(Bgpvmopc opc)
+{
+	return opc >= BGP_VMOP_CFAIL && opc <= BGP_VMOP_ORPASS;
+}
 
 /// Jump if zero - Skip over a positive number of instructions if topmost stack element is 0.
-#define BGP_VMOP_JZ     U8_C(12)
+#define BGP_VMOP_JZ     U8_C(14)
 /// Jump if non-zero - Skip over a positive number of instructions if topmost stack element is not 0.
-#define BGP_VMOP_JNZ    U8_C(13)
+#define BGP_VMOP_JNZ    U8_C(15)
+
+FORCE_INLINE Boolean Bgp_ISVMOPJMP(Bgpvmopc opc)
+{
+	return opc == BGP_VMOP_JZ || opc == BGP_VMOP_JNZ;
+}
 
 /// CHECK TYPE - ARG is the `BgpType` to test against
-#define BGP_VMOP_CHKT   U8_C(14)
+#define BGP_VMOP_CHKT   U8_C(16)
 /// CHECK ATTRIBUTE - ARG is the `BgpAttrCode` to test for existence
-#define BGP_VMOP_CHKA   U8_C(15)
+#define BGP_VMOP_CHKA   U8_C(17)
 
-#define BGP_VMOP_EXCT   U8_C(16)
-#define BGP_VMOP_SUPN   U8_C(17)
-#define BGP_VMOP_SUBN   U8_C(18)
+#define BGP_VMOP_EXCT   U8_C(18)
+#define BGP_VMOP_SUPN   U8_C(19)
+#define BGP_VMOP_SUBN   U8_C(20)
 /// RELATED - Tests whether the BGP message contains prefixes related with the provided ones
-#define BGP_VMOP_RELT   U8_C(19)
+#define BGP_VMOP_RELT   U8_C(21)
 
 /// Returns `TRUE` if `opc` belongs to an instruction operating on NETwork prefixes.
 FORCE_INLINE Boolean BGP_ISVMOPNET(Bgpvmopc opc)
@@ -102,17 +116,20 @@ FORCE_INLINE Boolean BGP_ISVMOPNET(Bgpvmopc opc)
 	return opc >= BGP_VMOP_EXCT && opc <= BGP_VMOP_RELT;
 }
 
-/// AS PATH MATCH - Tests BGP message AS PATH against a match expression
-#define BGP_VMOP_ASMTCH U8_C(20)
-/// FAST AS PATH MATCH - AS PATH test using precompiled AS PATH match expression
-#define BGP_VMOP_FASMTC U8_C(21)
+/// AS PATH MATCH - Tests BGP message AS PATH against a precompiled match expression
+#define BGP_VMOP_ASMTCH U8_C(22)
 /// COMMUNITY MATCH - COMMUNITY test using a precompiled COMMUNITY match expression
-#define BGP_VMOP_COMTCH U8_C(22)
+#define BGP_VMOP_COMTCH U8_C(23)
 /// ALL COMMUNITY MATCH - Like COMTCH, but requires all communities to be present inside message
-#define BGP_VMOP_ACOMTC U8_C(23)
+#define BGP_VMOP_ACOMTC U8_C(24)
 
 /// END - Terminate VM execution with the latest result
-#define BGP_VMOP_END    U8_C(24)
+#define BGP_VMOP_END    U8_C(25)
+
+FORCE_INLINE Boolean BGP_ISVMOPENDING(Bgpvmopc opc)
+{
+	return opc == BGP_VMOP_ENDBLK || opc == BGP_VMOP_END;
+}
 
 // #define BGP_VMOP_MOVK      MOVE K - Move topmost K index to ARG K index
 // #define BGP_VMOP_DISCRD    DISCARD - discard vm->curMatch if any

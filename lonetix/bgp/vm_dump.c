@@ -41,6 +41,8 @@ static const char *OpcString(Bgpvmopc opc)
 	case BGP_VMOP_NOT:    return "NOT";
 	case BGP_VMOP_CFAIL:  return "CFAIL";
 	case BGP_VMOP_CPASS:  return "CPASS";
+	case BGP_VMOP_ORFAIL: return "ORFAIL";
+	case BGP_VMOP_ORPASS: return "ORPASS";
 	case BGP_VMOP_JZ:     return "JZ";
 	case BGP_VMOP_JNZ:    return "JNZ";
 	case BGP_VMOP_CHKT:   return "CHKT";
@@ -50,7 +52,6 @@ static const char *OpcString(Bgpvmopc opc)
 	case BGP_VMOP_SUBN:   return "SUBN";
 	case BGP_VMOP_RELT:   return "RELT";
 	case BGP_VMOP_ASMTCH: return "ASMTCH";
-	case BGP_VMOP_FASMTC: return "FASMTC";
 	case BGP_VMOP_COMTCH: return "COMTCH";
 	case BGP_VMOP_ACOMTC: return "ACOMTC";
 	case BGP_VMOP_END:    return "END";
@@ -181,7 +182,7 @@ static char *CommentCodeLine(char *line, const char *comment)
 
 void Bgp_VmDumpProgram(Bgpvm *vm, void *streamp, const StmOps *ops)
 {
-    char explainbuf[64];
+	char explainbuf[64];
 	char buf[256];
 
 	int indent = 0;
@@ -234,7 +235,7 @@ void Bgp_VmDumpProgram(Bgpvm *vm, void *streamp, const StmOps *ops)
 
 			p = Utoa(opa, p);
 			if (opc == BGP_VMOP_JZ || opc == BGP_VMOP_JNZ)
-			    opastr = ExplainJump(explainbuf, ip, opa, vm->progLen);
+				opastr = ExplainJump(explainbuf, ip, opa, vm->progLen);
 
 			break;
 		case BGP_VMOP_TAG:
