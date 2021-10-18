@@ -11,11 +11,7 @@
 
 #include "numlib.h"
 
-#include <string.h>
-
-// XXX(micia): benchmark memcpy()-less version, something with rep stos
-//             amount of data copied over is very small, so it would probably pay off
-//             leaving memcpy() out
+#include "smallbytecopy.h"
 
 char *Utoa(unsigned long long x, char *dest)
 {
@@ -31,7 +27,7 @@ char *Utoa(unsigned long long x, char *dest)
 	} while (x != 0);
 
 	n = (buf + sizeof(buf)) - p;
-	memcpy(dest, p, n);
+	_smallbytecopy32(dest, p, n);
 	return dest + n - 1;
 }
 
@@ -57,7 +53,7 @@ char *Itoa(long long x, char *dest)
 		*--p = '-';
 
 	n = (buf + sizeof(buf)) - p;
-	memcpy(dest, p, n);
+	_smallbytecopy32(dest, p, n);
 	return dest + n - 1;
 }
 
@@ -75,6 +71,6 @@ char *Xtoa(unsigned long long x, char *dest)
 	} while (x != 0);
 
 	n = (buf + sizeof(buf)) - p;
-	memcpy(dest, p, n);
+	_smallbytecopy32(dest, p, n);
 	return dest + n - 1;
 }
