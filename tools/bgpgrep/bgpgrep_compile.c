@@ -314,7 +314,7 @@ static Expridx GetTerm(void)
 		Sint32 kidx = BgpgrepC_BakeAsRegexp();
 
 		c[n++] = BGP_VMOP(BGP_VMOP_LOADK, kidx);
-		c[n++] = BGP_VMOP_FASMTC;
+		c[n++] = BGP_VMOP_ASMTCH;
 		return PushLeaf(c, n);
 
 	} else if (strcmp(C.curterm, "-peer") == 0) {
@@ -468,18 +468,15 @@ static Expropc BgpgrepC_CompileRecurse(Expridx idx, Expropc opc)
 			Bgp_VmEmit(&S.vm, BGP_VMOP_BLK);
 
 		BgpgrepC_CompileRecurse(op->n.l, op->opc);
-		if (C.code[op->n.l].opc != OP_AND) {
-			Bgp_VmEmit(&S.vm, BGP_VMOP_NOT);
-			Bgp_VmEmit(&S.vm, BGP_VMOP_CFAIL);
-		}
+		if (C.code[op->n.l].opc != OP_AND)
+			Bgp_VmEmit(&S.vm, BGP_VMOP_ORFAIL);
+
 		BgpgrepC_CompileRecurse(op->n.r, op->opc);
-		if (C.code[op->n.r].opc != OP_AND) {
-			Bgp_VmEmit(&S.vm, BGP_VMOP_NOT);
-			Bgp_VmEmit(&S.vm, BGP_VMOP_CFAIL);
-		}
+		if (C.code[op->n.r].opc != OP_AND)
+			Bgp_VmEmit(&S.vm, BGP_VMOP_ORFAIL);
+
 		if (nestedBlock) {
 			Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, TRUE));
-			Bgp_VmEmit(&S.vm, BGP_VMOP_CPASS);
 			Bgp_VmEmit(&S.vm, BGP_VMOP_ENDBLK);
 		}
 		break;
@@ -498,8 +495,7 @@ static Expropc BgpgrepC_CompileRecurse(Expridx idx, Expropc opc)
 			Bgp_VmEmit(&S.vm, BGP_VMOP_CPASS);
 
 		if (nestedBlock) {
-			Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, TRUE));
-			Bgp_VmEmit(&S.vm, BGP_VMOP_CFAIL);
+			Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, FALSE));
 			Bgp_VmEmit(&S.vm, BGP_VMOP_ENDBLK);
 		}
 		break;
@@ -531,16 +527,11 @@ static void BgpgrepC_Compile(Expridx startIdx)
 		Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, TRUE));
 		Bgp_VmEmit(&S.vm, BGP_VMOP_CFAIL);
 		break;
-	case OP_AND:
-		Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, TRUE));
-		Bgp_VmEmit(&S.vm, BGP_VMOP_CPASS);
+	case OP_AND:  // Good as it is
 		break;
-
 	case OP_NOT:
 	case OP_LEAF:
-		Bgp_VmEmit(&S.vm, BGP_VMOP_CPASS);
-		Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, TRUE));
-		Bgp_VmEmit(&S.vm, BGP_VMOP_CFAIL);
+		Bgp_VmEmit(&S.vm, BGP_VMOP_ORFAIL);
 		break;
 
 	default: UNREACHABLE; break;
@@ -575,7 +566,7 @@ static void BgpgrepC_Optimize(void)
 	Boolean    changed;
 
 	i = 0;
-	while (i < S.vm.progLen) {  // NOTE: don't care for END
+	while (i <= S.vm.progLen) {  // NOTE: Take END into account
 		if (S.vm.prog[i] == BGP_VMOP_NOP) {
 			// Skip initial NOPs
 			i++;
@@ -586,7 +577,7 @@ static void BgpgrepC_Optimize(void)
 
 		// Fill peephole window
 		for (j = 0, n = 0; n < ARRAY_SIZE(w); j++) {
-			if (i + j >= S.vm.progLen)  // NOTE: don't care for END
+			if (i + j > S.vm.progLen)  // NOTE: Take END into account
 				break;
 			if (S.vm.prog[i+j] == BGP_VMOP_NOP)
 				continue;  // do not place any NOP inside window
@@ -597,7 +588,7 @@ static void BgpgrepC_Optimize(void)
 		}
 
 		// Trivial redundant operation elimination
-		for (j = 1; j < n; j++) {
+		for (j = 1; j < n; j++) {  // 2-instruction checks
 			// NOT-NOT = NOP
 			if (w[j] == BGP_VMOP_NOT && w[j-1] == BGP_VMOP_NOT) {
 				w[j-1] = w[j] = BGP_VMOP_NOP;
@@ -621,39 +612,59 @@ static void BgpgrepC_Optimize(void)
 				changed = TRUE;
 				continue;
 			}
+			// NOT-CFAIL = ORFAIL
+			if (w[j-1] == BGP_VMOP_NOT && w[j] == BGP_VMOP_CFAIL) {
+				w[j-1] = BGP_VMOP_NOP;
+				w[j]   = BGP_VMOP_ORFAIL;
+
+				changed = TRUE;
+				continue;
+			}
+			// NOT-CPASS = ORPASS
+			if (w[j-1] == BGP_VMOP_NOT && w[j] == BGP_VMOP_CPASS) {
+				w[j-1] = BGP_VMOP_NOP;
+				w[j]   = BGP_VMOP_ORPASS;
+
+				changed = TRUE;
+				continue;
+			}
+			// NOT-ORFAIL = CFAIL
+			if (w[j-1] == BGP_VMOP_NOT && w[j] == BGP_VMOP_ORFAIL) {
+				w[j-1] = BGP_VMOP_NOP;
+				w[j]   = BGP_VMOP_CFAIL;
+
+				changed = TRUE;
+				continue;
+			}
+			// NOT-ORPASS = CPASS
+			if (w[j-1] == BGP_VMOP_NOT && w[j] == BGP_VMOP_ORPASS) {
+				w[j-1] = BGP_VMOP_NOP;
+				w[j]   = BGP_VMOP_CPASS;
+
+				changed = TRUE;
+				continue;
+			}
+			// [NON-BREAKING,NON-ENDING]-END = NOP-END
+			if (!BGP_ISVMOPBREAKING(w[j-1]) && !BGP_ISVMOPENDING(w[j-1]) && w[j] == BGP_VMOP_END) {
+				w[j-1] = BGP_VMOP_NOP;
+
+				changed = TRUE;
+				continue;
+			}
 		}
-
-		if (n == 4) {
-			// Simplify common CFAIL and CPASS chains introduced by AND/OR blocks
-			static const Bgpvmbytec ncfncp[] = {
-				BGP_VMOP_NOT,
-				BGP_VMOP_CFAIL,
-				BGP_VMOP(BGP_VMOP_LOADU, TRUE),
-				BGP_VMOP_CPASS
-			};
-			static const Bgpvmbytec ncpncf[] = {
-				BGP_VMOP_NOT,
-				BGP_VMOP_CPASS,
-				BGP_VMOP(BGP_VMOP_LOADU, TRUE),
-				BGP_VMOP_CFAIL
-			};
-
-			if (memcmp(w, ncfncp, sizeof(ncfncp)) == 0) {
-				// Move CPASS up
-				w[0] = BGP_VMOP_NOP;
-				w[1] = BGP_VMOP_CPASS;
-				w[2] = BGP_VMOP(BGP_VMOP_LOADU, TRUE);
-				w[3] = BGP_VMOP_CFAIL;
+		for (j = 3; j < n; j++) {  // 4-instruction checks
+			// CPASS-LOADU(T)-CFAIL-<ENDING> = ORFAIL-LOADU(T)-<ENDING>
+			// Leftover by OR chains
+			if (w[j-3] == BGP_VMOP_CPASS &&
+			    IsLoadNz(w[j-2]) &&
+			    w[j-1] == BGP_VMOP_CFAIL &&
+			    BGP_ISVMOPENDING(w[j])) {
+				w[j-3] = BGP_VMOP_NOP;
+				w[j-2] = BGP_VMOP_ORFAIL;
+				w[j-1] = BGP_VMOP(BGP_VMOP_LOADU, TRUE);
 
 				changed = TRUE;
-			} else if (memcmp(w, ncpncf, sizeof(ncpncf)) == 0) {
-				// Move CFAIL up
-				w[0] = BGP_VMOP_NOP;
-				w[1] = BGP_VMOP_CFAIL;
-				w[2] = BGP_VMOP(BGP_VMOP_LOADU, TRUE);
-				w[3] = BGP_VMOP_CPASS;
-
-				changed = TRUE;
+				continue;
 			}
 		}
 
@@ -735,7 +746,7 @@ void Bgpgrep_CompileVmProgram(int argc, char **argv)
 
 			if (tok)
 				Bgpgrep_Fatal("Unexpected '%s' after '%s'", tok, last);
-			else  // should never happen but still...
+			else
 				Bgpgrep_Fatal("Unexpected match expression end after '%s'", last);
 		}
 
@@ -744,9 +755,6 @@ void Bgpgrep_CompileVmProgram(int argc, char **argv)
 		BgpgrepC_Optimize();
 	} else {
 		// Trivial filter
-		Bgp_VmEmit(&S.vm, BGP_VMOP(BGP_VMOP_LOADU, TRUE));
-		Bgp_VmEmit(&S.vm, BGP_VMOP_CPASS);
-
 		S.isTrivialFilter = TRUE;
 	}
 	if (S.dumpBytecode)
