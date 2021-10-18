@@ -174,18 +174,27 @@ FORCE_INLINE void Bgp_VmDoLoadn(Bgpvm *vm)
 }
 
 /// Break out of current `BLK`.
-FORCE_INLINE void Bgp_VmDoBreak(Bgpvm *vm)
+INLINE void Bgp_VmDoBreak(Bgpvm *vm)
 {
 	Bgpvmopc opc;
+	unsigned n = 1;
 
-	do
-		opc = BGP_VMOPC(vm->prog[vm->pc++]);
-	while (opc != BGP_VMOP_ENDBLK && opc != BGP_VMOP_END);
+	do {
+		opc = BGP_VMOPC(vm->prog[vm->pc]);
+		if (opc == BGP_VMOP_END)  // shouldn't happen with decent bytecode...
+			break;
+
+		if (opc == BGP_VMOP_BLK)
+			n++;
+		if (opc == BGP_VMOP_ENDBLK)
+			n--;
+
+		vm->pc++;
+	} while (n > 0);
 
 	if (opc == BGP_VMOP_ENDBLK)
 		vm->nblk--;
 }
-
 
 /// Execute `CALL` of function `vm->funcs[idx]`.
 FORCE_INLINE void Bgp_VmDoCall(Bgpvm *vm, Uint8 idx)
