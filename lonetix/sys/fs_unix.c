@@ -73,7 +73,8 @@ Fildes Sys_Fopen(const char *path, FopenMode mode, unsigned flags)
 
 	Sys_SetErrStat(errno, "open()/mkstemp()");
 
-	// Apply hints
+	// Apply hints (if possible)
+#ifdef __linux__
 	if (fd >= 0) {
 		if (flags & FH_SEQ)
 			posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
@@ -82,7 +83,10 @@ Fildes Sys_Fopen(const char *path, FopenMode mode, unsigned flags)
 		if (flags & FH_NOREUSE)
 			posix_fadvise(fd, 0, 0, POSIX_FADV_NOREUSE);
 	}
-	return fd;
+#endif
+    USED(flags);
+
+    return fd;
 }
 
 Sint64 Sys_Fread(Fildes fd, void *buf, size_t nbytes)
@@ -173,10 +177,18 @@ Judgement Sys_Fsync(Fildes fd, Boolean fullSync)
 {
 	errno = 0;
 
+#ifdef __linux__
+	// Take advantage of fdatasync() if possible
 	if (fullSync)
 		fsync(fd);
 	else
 		fdatasync(fd);
+#else
+	// Play it safe and portable
+	USED(fullSync);
+
+	fsync(fd);
+#endif
 
 	return Sys_SetErrStat(errno, "fsync()/fdatasync()");
 }
