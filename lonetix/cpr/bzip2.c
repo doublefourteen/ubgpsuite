@@ -24,6 +24,9 @@ struct Bzip2StmObj {
 	const StmOps *ops;
 	unsigned      bufsiz;
 	Boolean8      compressing;
+	Boolean8      eof;
+	Boolean8      small;
+	Uint8         verbosity;
 	char          buf[FLEX_ARRAY];  // `bufsiz' bytes
 };
 
@@ -104,6 +107,61 @@ static THREAD_LOCAL Bzip2Ret bzip2_errStat = 0;
 static void Bzip2_SetErrStat(Bzip2Ret ret)
 {
 	bzip2_errStat = ret;
+}
+
+static Boolean Bzip2_FillBuf(Bzip2StmHn hn)
+{
+	Sint64 n = hn->ops->Read(hn->streamp, hn->buf, hn->bufsiz);
+
+	if (n <= 0) {
+		if (n == 0)
+			hn->eof = TRUE;
+		else
+			Bzip2_SetErrStat(BZ_IO_ERROR);
+
+		return FALSE;
+	}
+
+	hn->bz2.next_in  = hn->buf;
+	hn->bz2.avail_in = n;
+	return TRUE;
+}
+
+static Boolean Bzip2_ResetDecompress(Bzip2StmHn hn)
+{
+	if (hn->eof)
+		return FALSE;
+
+	if (hn->bz2.avail_in == 0 && !Bzip2_FillBuf(hn))
+		return FALSE;
+
+	// Save current buffer state
+	char *out = hn->bz2.next_out;
+	size_t nout = hn->bz2.avail_out;
+
+	char *unused = hn->bz2.next_in;
+	size_t nunused = hn->bz2.avail_in;
+
+	// Reset decompressor
+	BZ2_bzDecompressEnd(&hn->bz2);
+
+	int err = BZ2_bzDecompressInit(&hn->bz2, hn->verbosity, hn->small);
+
+	// Restore state, so Bzip2_Read() can calculate
+	// proper I/O stats
+	hn->bz2.next_in   = unused;
+	hn->bz2.avail_in  = nunused;
+	hn->bz2.next_out  = out;
+	hn->bz2.avail_out = nout;
+
+	if (err != BZ_OK) {
+		// Clear bz2.state so no trouble occurs on Bzip2_Close()
+		hn->bz2.state = NULL;
+		Bzip2_SetErrStat(err);
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 Bzip2Ret Bzip2_GetErrStat(void)
@@ -207,6 +265,9 @@ Bzip2StmHn Bzip2_OpenDecompress(void               *streamp,
 	hn->ops         = ops;
 	hn->bufsiz      = bufsiz;
 	hn->compressing = FALSE;
+	hn->eof         = FALSE;
+	hn->small       = small;
+	hn->verbosity   = verbosity;
 
 	int err = BZ2_bzDecompressInit(&hn->bz2, verbosity, small);
 	if (err != BZ_OK) {
@@ -226,33 +287,24 @@ Sint64 Bzip2_Read(Bzip2StmHn hn, void *buf, size_t nbytes)
 		return -1;
 	}
 
-	Bzip2Ret ret = BZ_OK;
-
 	hn->bz2.next_out  = (char *) buf;
 	hn->bz2.avail_out = nbytes;
+
 	while (hn->bz2.avail_out > 0) {
-		if (hn->bz2.avail_in == 0) {
-			Sint64 n = hn->ops->Read(hn->streamp, hn->buf, hn->bufsiz);
-			if (n <= 0) {
-				if (n < 0) ret = BZ_IO_ERROR;
-
-				break;  // EOF
-			}
-
-			hn->bz2.next_in  = hn->buf;
-			hn->bz2.avail_in = n;
-		}
+		if (hn->bz2.avail_in == 0 && !Bzip2_FillBuf(hn))
+			break;
 
 		int err = BZ2_bzDecompress(&hn->bz2);
-		if (err == BZ_STREAM_END)
-			break;
 		if (err != BZ_OK) {
-			ret = err;
-			break;
+			if (err != BZ_STREAM_END) {
+				Bzip2_SetErrStat(err);
+				break;
+			}
+			if (!Bzip2_ResetDecompress(hn))
+				break;  // done
 		}
 	}
 
-	Bzip2_SetErrStat(ret);
 	return nbytes - hn->bz2.avail_out;
 }
 
