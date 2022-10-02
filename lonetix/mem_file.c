@@ -148,12 +148,12 @@ Sint64 Stm_MemFileWrite(MemFile *stm, const void *buf, size_t nbytes)
 	if ((stm->flags & MEM_FILE_WRBIT) == 0)
 		return -1;
 
-	size_t navail = stm->cap - stm->nbytes;
+	size_t navail = stm->cap - stm->pos;
 	size_t nreq   = nbytes + 1;  // for trailing '\0'
 	if (navail < nreq) {
 		if ((stm->flags & MEM_FILE_NOGROWBIT) == 0) {
 			// grow buffer
-			if (Stm_MemFileGrow(stm, nreq) != OK)
+			if (Stm_MemFileGrow(stm, stm->pos + nreq) != OK)
 				return -1;
 
 		} else
